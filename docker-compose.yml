@@ -1,0 +1,16 @@
+version: '3.8'
+services:
+  doxa_engine:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/data:/app/data
+    env_file: .env
+  
+  doxa_console:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - doxa_engine

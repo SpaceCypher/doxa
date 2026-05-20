@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+.venv/
+venv/
+backend/venv/
+backend/.venv/
+
+# Environment
+.env
+.env.local
+
+# Build artifacts
+.next/
+dist/
+build/
+__pycache__/
+*.pyc
+*.pyo
+
+# Snapback (large blobs)
+.snapback/
+snapback/
+
+# Database
+*.db
+data/
+
+# Scratch / temp
+scratch/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
