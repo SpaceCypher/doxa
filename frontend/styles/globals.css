@@ -1,0 +1,64 @@
+@import "tailwindcss";
+@theme {
+  --color-brand-500: #3b82f6;
+  --color-brand-600: #2563eb;
+  --color-accent-500: #f59e0b;
+  --color-accent-600: #d97706;
+
+  --font-sans: 'Inter', sans-serif;
+  --font-heading: 'Outfit', sans-serif;
+}
+
+:root {
+  --background: #050505;
+  --foreground: #E7E1D5;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+}
+
+/* Earthy Brutalist Utilities */
+.brutal-panel {
+  background: #F2EFE9;
+  border: 3px solid #2C2A25;
+  box-shadow: 6px 6px 0px 0px rgba(44, 42, 37, 1);
+  border-radius: 0;
+}
+
+.brutal-button {
+  background: #F2EFE9;
+  border: 2px solid #2C2A25;
+  box-shadow: 3px 3px 0px 0px rgba(44, 42, 37, 1);
+  border-radius: 0;
+  transition: all 0.1s ease;
+}
+
+.brutal-button:active {
+  box-shadow: 0px 0px 0px 0px rgba(44, 42, 37, 1);
+  transform: translate(3px, 3px);
+}
+
+.glow-text {
+  text-shadow: 0 0 10px rgba(255,255,255,0.3);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
