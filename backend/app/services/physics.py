@@ -73,8 +73,16 @@ async def process_tick(broadcast_callback, run_id: str):
         else:
             # Bug 1 Fix: Only count Food-typed resources, not Crops, for respawn threshold
             food_count = sum(1 for r in resources if r.get("type") == "Food")
-            if food_count < 20:
-                for _ in range(20 - food_count):
+            
+            # Loop 2: Starvation cluster global food respawn bonus
+            physics_constants = dict(state.physics_constants) if state.physics_constants else {}
+            bonus = physics_constants.get("food_respawn_bonus")
+            target_food = 20
+            if bonus and state.current_tick <= bonus.get("expires_tick", 0):
+                target_food = int(20 * bonus.get("multiplier", 1.0))
+            
+            if food_count < target_food:
+                for _ in range(target_food - food_count):
                     resources.append({
                         "id": str(uuid.uuid4())[:8],
                         "type": "Food",
@@ -251,8 +259,11 @@ async def process_tick(broadcast_callback, run_id: str):
                     
             session.commit()
         
-        # Satiety decay rate
+        # Satiety decay rate — may be modified by Loop 4 (Democratic Action)
+        physics_constants = dict(state.physics_constants) if state.physics_constants else {}
         decay_rate = float(os.getenv("SATIETY_DECAY_RATE", "0.1"))
+        decay_multiplier = physics_constants.get("satiety_decay_multiplier", 1.0)
+        decay_rate *= decay_multiplier
         
         # Bug 5 Fix: Pre-load constants once per tick, not once per agent
         _MAX_LIFESPAN = int(os.getenv("MAX_LIFESPAN", "300"))
@@ -327,6 +338,16 @@ async def process_tick(broadcast_callback, run_id: str):
                 # Active: stamina passively drains at a slow rate (0.05 per tick)
                 vitals["stamina"] = max(0.0, vitals.get("stamina", 100.0) - 0.05)
                 
+            # Loop 3: Settlement zone health/stamina regen bonus
+            settlements = physics_constants.get("settlements", [])
+            in_settlement = any(
+                abs(ax - s["cx"]) + abs(ay - s["cy"]) <= s.get("radius", 12)
+                for s in settlements
+            )
+            if in_settlement:
+                vitals["health"] = min(100.0, vitals.get("health", 100.0) + 5.0)
+                vitals["stamina"] = min(100.0, vitals.get("stamina", 100.0) + 1.0)
+                
             agent.vitals = vitals
             from sqlalchemy.orm.attributes import flag_modified
             flag_modified(agent, "vitals")
@@ -395,8 +416,12 @@ async def process_tick(broadcast_callback, run_id: str):
         actions = await run_cognitive_loop(agents_data, session)
         
         # Apply actions
+        from .pattern_detector import apply_laws
+        active_laws = list(state.laws) if state.laws else []
         agent_states = []
-        for agent, action in zip(agents, actions):
+        for i, (agent, action) in enumerate(zip(agents, actions)):
+            agent_data = agents_data[i]
+            
             if action["type"] == "MOVE" and agent.status == "Operation":
                 coords = dict(agent.coordinates)
                 ax = coords.get("x", 0)
@@ -411,15 +436,18 @@ async def process_tick(broadcast_callback, run_id: str):
                 
                 terrain_info = TERRAIN_TYPES.get(target_terrain, TERRAIN_TYPES[3])
                 
+                # Autonomous Growth: Apply Laws
+                stamina_cost = apply_laws(agent, "MOVE", "stamina", terrain_info["move_stamina"], active_laws, agent_data)
+                
                 vitals = dict(agent.vitals)
-                if not terrain_info["impassable"] and vitals.get("stamina", 100.0) >= terrain_info["move_stamina"]:
+                if not terrain_info["impassable"] and vitals.get("stamina", 100.0) >= stamina_cost:
                     coords["x"] = nx
                     coords["y"] = ny
                     agent.coordinates = coords
                     from sqlalchemy.orm.attributes import flag_modified
                     flag_modified(agent, "coordinates")
                     
-                    vitals["stamina"] -= terrain_info["move_stamina"]
+                    vitals["stamina"] -= stamina_cost
                     agent.vitals = vitals
                     flag_modified(agent, "vitals")
                     
@@ -441,7 +469,11 @@ async def process_tick(broadcast_callback, run_id: str):
                         resources.pop(food_idx)
                     vitals = dict(agent.vitals)
                     max_sat = float(os.getenv("MAX_SATIETY", "100.0"))
-                    vitals["satiety"] = min(max_sat, vitals.get("satiety", 100.0) + 40.0)
+                    
+                    # Autonomous Growth: Apply Laws
+                    satiety_gain = apply_laws(agent, "EAT", "satiety", 40.0, active_laws, agent_data)
+                    
+                    vitals["satiety"] = min(max_sat, vitals.get("satiety", 100.0) + satiety_gain)
                     agent.vitals = vitals
                 from sqlalchemy.orm.attributes import flag_modified
                 flag_modified(agent, "vitals")
@@ -486,6 +518,10 @@ async def process_tick(broadcast_callback, run_id: str):
                         
                         # Fix: Priests get +0.2 trust bonus on COMMUNICATE (religious authority)
                         trust_gain = 1.2 if agent.social_status == "Priest" else 1.0
+                        
+                        # Autonomous Growth: Apply Laws
+                        trust_gain = apply_laws(agent, "COMMUNICATE", "trust_bonus", trust_gain, active_laws, agent_data)
+                        
                         from .society import update_trust_graph
                         update_trust_graph(session, agent.agent_id, target_id, trust_gain)
                         update_trust_graph(session, target_id, agent.agent_id, trust_gain)
@@ -529,8 +565,17 @@ async def process_tick(broadcast_callback, run_id: str):
                         flag_modified(agent, "inventory")
                     else:
                         agent.social_status = "Builder"
-                        
-                    structures.append({"builder": agent.agent_id, "structure": structure, "x": cx, "y": cy, "tick": state.current_tick})
+                    # Apply Loop 4: Architectural Age bonus if active
+                    physics_constants = dict(state.physics_constants) if state.physics_constants else {}
+                    bonus_durability = physics_constants.get("structure_durability_bonus", 0)
+                    structures.append({
+                        "builder": agent.agent_id,
+                        "structure": structure,
+                        "x": cx,
+                        "y": cy,
+                        "tick": state.current_tick,
+                        "durability": 100 + bonus_durability
+                    })
                     
                     # Phase 8: Claim territory for this civilization
                     from .economy import claim_territory
@@ -588,6 +633,9 @@ async def process_tick(broadcast_callback, run_id: str):
                         # Target takes 15 damage (reduced by 50% if in home territory)
                         tgt_vitals = dict(target_agent.vitals)
                         dmg = 15.0
+                        
+                        # Autonomous Growth: Apply Laws
+                        dmg = apply_laws(agent, "ATTACK", "damage_multiplier", dmg, active_laws, agent_data)
                         
                         # Fix Bug B: Warrior is the behavior-derived name; Soldier is structure-assigned.
                         # Both must grant the +50% damage buff.
@@ -955,7 +1003,7 @@ async def process_tick(broadcast_callback, run_id: str):
         
         # Bug 1 Fix: Farming runs every tick so crop_age matches actual tick count
         from .economy import process_farming
-        resources = process_farming(resources)   # Age crops, promote mature ones to Food
+        resources = process_farming(resources, physics_constants)   # Age crops, promote mature ones to Food
         
         # Every 5 ticks, update reputations and society mechanics
         if state.current_tick % 5 == 0:
@@ -1003,6 +1051,28 @@ async def process_tick(broadcast_callback, run_id: str):
                           f"{processed_count} agents consolidated their memories into beliefs."
             ))
             print(f"[DREAM CYCLE] Tick {state.current_tick}: {processed_count} agents processed.")
+
+        # ── Loop 4: Accumulate Action Tally (used by Democratic Action detector) ───────
+        pc = dict(state.physics_constants) if state.physics_constants else {}
+        tally = dict(pc.get("action_tally", {}))
+        for _action in actions:
+            atype = _action.get("type", "IDLE")
+            tally[atype] = tally.get(atype, 0) + 1
+        pc["action_tally"] = tally
+        state.physics_constants = pc
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(state, "physics_constants")
+        session.add(state)
+
+        # ── Pattern Detector (Autonomous Growth) ──────────────────────────────
+        if state.current_tick > 0 and state.current_tick % 50 == 0:
+            from .pattern_detector import run_pattern_detector
+            await run_pattern_detector(session)
+            logs.append(AgentLogEntry(
+                agent_id="SYSTEM",
+                action="PATTERN_DETECTOR",
+                reasoning=f"Pattern Detector ran at Tick {state.current_tick}."
+            ))
 
         # Bug 2 Fix: Build latest_cpr from current state and merge in the decay_cpr sub-keys
         # (wood, water) so that neither the decay write nor the resource/structure write clobbers the other.
@@ -1116,6 +1186,23 @@ async def process_tick(broadcast_callback, run_id: str):
                     action="DEATH",
                     reasoning=f"Agent {agent.agent_id} ({agent_role}) of {agent_civ} has perished from {cause} on Tick {state.current_tick}."
                 ))
+                
+                # ── Loop 2: Tag death into death_markers ──────────────────────────
+                current_markers = list(state.death_markers) if state.death_markers else []
+                current_markers.append({
+                    "cause": cause,
+                    "x": dead_x,
+                    "y": dead_y,
+                    "tick": state.current_tick,
+                    "civ": agent_civ
+                })
+                # Keep last 500 death markers to prevent unbounded growth
+                if len(current_markers) > 500:
+                    current_markers = current_markers[-500:]
+                state.death_markers = current_markers
+                from sqlalchemy.orm.attributes import flag_modified
+                flag_modified(state, "death_markers")
+                session.add(state)
                 
                 session.delete(agent)
                 agent_states = [s for s in agent_states if s.id != agent.agent_id]

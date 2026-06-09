@@ -28,6 +28,11 @@ class GlobalState(SQLModel, table=True):
     # Phase 11: Tech Tree
     tech_tree: Any = Field(default={}, sa_column=Column(JSON))  # {"civ_a": ["agriculture", "masonry"], "civ_b": []}
     
+    # Phase 12: Autonomous Growth
+    laws: Any = Field(default=[], sa_column=Column(JSON))
+    physics_constants: Any = Field(default={}, sa_column=Column(JSON))
+    death_markers: Any = Field(default=[], sa_column=Column(JSON))
+    
     # World Generation
     world_seed: Optional[int] = Field(default=None)
     world_map: Any = Field(default=[], sa_column=Column(JSON))

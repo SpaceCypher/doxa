@@ -7,7 +7,7 @@ from ..models.db import Cognition
 from .memory import retrieve_topological_memory
 from .lore import query_lore
 
-def build_prompt(agent_state: Dict[str, Any], top_memories: List[Dict[str, Any]], lore: List[Dict[str, Any]] = []) -> str:
+def build_prompt(agent_state: Dict[str, Any], top_memories: List[Dict[str, Any]], lore: List[Dict[str, Any]] = [], laws: List[Dict[str, Any]] = []) -> str:
     """Build the ReAct prompt, embedding topologically retrieved memories and historical lore."""
     mem_text = "\n".join([f"- {m['text']} (Weight: {m['weight']})" for m in top_memories])
     lore_text = "\n".join([f"- {m['text']} (Tick: {m['tick']}, Source: {m['agent_id']})" for m in lore]) if lore else "None"
@@ -42,6 +42,14 @@ def build_prompt(agent_state: Dict[str, Any], top_memories: List[Dict[str, Any]]
     if directives_text:
         beliefs_text += "\n*** DIVINE DIRECTIVES (HIGHEST PRIORITY) ***\n" + directives_text
 
+    laws_text = ""
+    if laws:
+        laws_text = "Laws of Physics (Beliefs made manifest):\n"
+        for law in laws:
+            laws_text += f"- {law.get('original_belief')} -> {law.get('target_action')} modified by {law.get('effect_value')} for {law.get('effect_type')}\n"
+    else:
+        laws_text = "Laws of Physics: Default\n"
+
     prompt = f"""You are an autonomous being minimizing Variational Free Energy in a 2D grid simulation.
 Your ID: {agent_state['agent_id']}
 Your Location: X={agent_state['x']}, Y={agent_state['y']}
@@ -57,6 +65,8 @@ Nearby Objects: {', '.join(agent_state.get('nearby_objects', [])) if agent_state
 {msgs_text}
 
 {ep_mem_text}
+
+{laws_text}
 
 {beliefs_text}
 
@@ -165,6 +175,11 @@ async def run_cognitive_loop(agents_data: List[Dict[str, Any]], session: Session
     """Generates prompts with memories, queries LLM, returns actions."""
     if not agents_data:
         return []
+        
+    from ..models.db import GlobalState
+    state = session.exec(select(GlobalState).where(GlobalState.session_id == "default")).first()
+    active_laws = list(state.laws) if state and state.laws else []
+    
     
     # Bug C Fix: Only query LLM for Operation agents — Apprentices don't make independent decisions
     operation_indices = [i for i, a in enumerate(agents_data) if a.get('status', 'Operation') == 'Operation']
@@ -196,7 +211,7 @@ async def run_cognitive_loop(agents_data: List[Dict[str, Any]], session: Session
         # Query Akashic Records (Lore)
         lore_results = query_lore(civ_id=a.get('civilization_id', 'civ_a'), query_text=obs, n_results=3)
         
-        prompts.append({"text": build_prompt(a, mems, lore_results)})
+        prompts.append({"text": build_prompt(a, mems, lore_results, active_laws)})
     
     if not prompts:
         # All agents are apprentices, return IDLE for everyone

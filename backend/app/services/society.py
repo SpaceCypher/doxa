@@ -8,6 +8,10 @@ def calculate_asabiyyah_per_civ(session: Session) -> dict:
     agents = session.exec(select(Agent)).all()
     civs = set(a.civilization_id for a in agents)
     
+    state = session.exec(select(GlobalState).where(GlobalState.session_id == "default")).first()
+    physics_constants = dict(state.physics_constants) if state and state.physics_constants else {}
+    gain_multiplier = physics_constants.get("asabiyyah_gain_multiplier", 1.0)
+    
     asabiyyah_dict = {}
     for civ in civs:
         civ_agents = [a.agent_id for a in agents if a.civilization_id == civ]
@@ -19,7 +23,8 @@ def calculate_asabiyyah_per_civ(session: Session) -> dict:
         total_functional_nodes = sum(len(dict(c.belief_graph).get("functional", [])) if c.belief_graph else 0 for c in cognitions)
         baseline = 1.0
         decay = min(0.9, total_functional_nodes * 0.005)
-        asabiyyah_dict[civ] = round(baseline - decay, 3)
+        asabiyyah_val = (baseline - decay) * gain_multiplier
+        asabiyyah_dict[civ] = round(min(1.0, asabiyyah_val), 3)
         
     return asabiyyah_dict
 

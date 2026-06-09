@@ -12,7 +12,7 @@ import { TooltipIcon } from '../components/TooltipIcon';
 import { HowToPlayModal } from '../components/HowToPlayModal';
 
 export default function Home() {
-  const { tick, asabiyyah, agents, connected, cpr, centralLogs, setFocusedAgent, world_seed, clearLogs } = useTelemetry();
+  const { tick, asabiyyah, agents, connected, cpr, centralLogs, setFocusedAgent, world_seed, clearLogs, trackedAgentId, setTrackedAgentId } = useTelemetry();
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
@@ -24,6 +24,7 @@ export default function Home() {
   const [isActivityFeedExpanded, setIsActivityFeedExpanded] = useState(true);
   const [activityLogFilter, setActivityLogFilter] = useState<string[]>([]);
   const [showActivityFilter, setShowActivityFilter] = useState(false);
+  const [showTrackAgentDropdown, setShowTrackAgentDropdown] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
 
   useEffect(() => {
@@ -312,6 +313,57 @@ export default function Home() {
             </div>
           </div>
         )}
+
+        {/* TRACK AGENT BOX */}
+        <div className="flex items-center gap-2 mt-2 animate-in fade-in slide-in-from-top-2">
+          <div className={`h-10 px-4 font-bold uppercase tracking-widest text-xs flex items-center justify-between gap-2 transition-all bg-[#111110]/95 backdrop-blur border border-[#3B3A35] rounded shadow-2xl flex-1 ${trackedAgentId ? 'text-[#E7E1D5]' : 'text-[#A8A08F]'}`}>
+            <div className="flex items-center gap-2">
+              <MonitorPlay className={`w-4 h-4 ${trackedAgentId ? 'text-[#7DBB5A]' : 'text-[#C49A53]'}`} />
+              {trackedAgentId ? <span>Tracking: <span className="text-[#C49A53]">{trackedAgentId}</span></span> : <span>Follow Camera</span>}
+            </div>
+            {trackedAgentId && (
+              <button onClick={() => setTrackedAgentId(null)} className="text-[#FF4444] hover:text-white transition-colors" title="Stop Tracking">
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+          
+          <div className="relative">
+            <button 
+              onClick={() => setShowTrackAgentDropdown(!showTrackAgentDropdown)}
+              className={`h-10 w-10 flex items-center justify-center bg-[#111110]/95 backdrop-blur border border-[#3B3A35] rounded shadow-2xl transition-all ${showTrackAgentDropdown ? 'bg-[#E7E1D5] text-[#111110]' : 'text-[#A8A08F] hover:bg-[#1A1A18] hover:text-white'}`}
+              title="Select Agent to Track"
+            >
+              <Users className="w-4 h-4" />
+            </button>
+            
+            {showTrackAgentDropdown && (
+              <div className="absolute bottom-0 left-12 w-48 bg-[#111110]/95 backdrop-blur-md border border-[#3B3A35] rounded shadow-2xl overflow-hidden flex flex-col z-40">
+                <div className="px-3 py-2 border-b border-[#3B3A35] flex justify-between items-center bg-[#0A0A09]">
+                  <span className="text-[10px] font-bold text-[#A8A08F] uppercase tracking-wider">Agents</span>
+                  <button onClick={() => setShowTrackAgentDropdown(false)} className="text-[#A8A08F] hover:text-white"><X className="w-3 h-3" /></button>
+                </div>
+                <div className="max-h-48 overflow-y-auto custom-scrollbar flex flex-col">
+                  <button 
+                    onClick={() => { setTrackedAgentId(null); setShowTrackAgentDropdown(false); }}
+                    className={`px-3 py-2 text-xs text-left hover:bg-[#1A1A18] ${!trackedAgentId ? 'text-[#E7E1D5] font-bold bg-[#1A1A18]' : 'text-[#A8A08F]'}`}
+                  >
+                    NONE
+                  </button>
+                  {agents.map(a => (
+                    <button 
+                      key={a.id}
+                      onClick={() => { setTrackedAgentId(a.id); setShowTrackAgentDropdown(false); }}
+                      className={`px-3 py-2 text-xs text-left hover:bg-[#1A1A18] font-mono ${trackedAgentId === a.id ? 'text-[#C49A53] font-bold bg-[#1A1A18]' : 'text-[#A8A08F]'}`}
+                    >
+                      {a.id} <span className="opacity-50 text-[10px] font-sans">({a.civ})</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* MAP LEGEND DROPDOWN */}

@@ -35,3 +35,9 @@ Thumbs.db
 # IDE
 .idea/
 .vscode/
+
+# Project-specific exclusions
+COMPLETED_WORK.md
+context-docs/
+.ruff_cache/
+docker-compose.yml

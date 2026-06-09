@@ -54,10 +54,11 @@ interface TelemetryStore {
   centralLogs: AgentLogEntry[];
   connected: boolean;
   focusedAgent: string | null;
+  trackedAgentId: string | null;
   setTelemetry: (payload: TelemetryPayload) => void;
   setConnected: (status: boolean) => void;
   setFocusedAgent: (id: string | null) => void;
-  clearLogs: () => void;
+  setTrackedAgentId: (id: string | null) => void;
 }
 
 export const useTelemetry = create<TelemetryStore>()(
@@ -74,6 +75,7 @@ export const useTelemetry = create<TelemetryStore>()(
       centralLogs: [],
       connected: false,
       focusedAgent: null,
+      trackedAgentId: null,
       setTelemetry: (payload) => set((state) => {
         if (payload.tick === -1) {
           return {
@@ -112,6 +114,7 @@ export const useTelemetry = create<TelemetryStore>()(
       }),
       setConnected: (status) => set({ connected: status }),
       setFocusedAgent: (id) => set({ focusedAgent: id }),
+      setTrackedAgentId: (id) => set({ trackedAgentId: id }),
       clearLogs: () => set({ centralLogs: [], history: [], tick: 0 }),
     }),
     {

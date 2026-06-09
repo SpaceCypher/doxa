@@ -21,11 +21,12 @@ from sqlalchemy.orm.attributes import flag_modified
 CROP_MATURITY_TICKS = 10   # Ticks from planting to harvestable food
 CROP_DECAY_TICKS    = 5    # Ticks a mature crop survives before rotting
 
-def process_farming(resources: list) -> list:
+def process_farming(resources: list, physics_constants: dict = None) -> list:
     """
     Bug 3 Fix: Accepts the live resources list from physics.py directly — does NOT
     read/write the DB itself to avoid overwrite races.
     Ages all Crop resources; promotes mature ones to Food nodes.
+    Applies Loop 4 crop maturity bonus if agricultural revolution is active.
     Returns the updated resources list.
     """
     updated = []
@@ -38,10 +39,17 @@ def process_farming(resources: list) -> list:
         r = dict(r)  # shallow copy so we don't mutate the original reference
         r["crop_age"] = age
 
-        if age >= CROP_MATURITY_TICKS + CROP_DECAY_TICKS:
+        if physics_constants:
+            maturity_bonus = physics_constants.get("crop_maturity_bonus", 0)
+        else:
+            maturity_bonus = 0
+
+        maturity_ticks = max(1, CROP_MATURITY_TICKS + maturity_bonus)
+
+        if age >= maturity_ticks + CROP_DECAY_TICKS:
             # Rotten — remove from world silently
             continue
-        elif age >= CROP_MATURITY_TICKS:
+        elif age >= maturity_ticks:
             # Mature — convert to a Food node agents can EAT
             updated.append({
                 "id": r["id"],

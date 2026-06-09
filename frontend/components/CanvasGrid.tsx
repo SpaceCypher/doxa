@@ -61,6 +61,7 @@ export default function CanvasGrid() {
   const agentsLerpRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const offsetRef = useRef({ x: 0, y: 0 });
   const scaleRef = useRef(1);
+  const targetScaleRef = useRef<number | null>(null);
   const velocityRef = useRef({ x: 0, y: 0 });
   const isDraggingRef = useRef(false);
   const lastMouseRef = useRef({ x: 0, y: 0 });
@@ -113,6 +114,15 @@ export default function CanvasGrid() {
     setFocusedAgent(null); // Clear so we don't lock the camera
   }, [focusedAgent, agents, scale, setFocusedAgent]);
 
+  const trackedAgentId = useTelemetry((state) => state.trackedAgentId);
+  useEffect(() => {
+    if (trackedAgentId) {
+      targetScaleRef.current = 2.0;
+    } else {
+      targetScaleRef.current = null;
+    }
+  }, [trackedAgentId]);
+
   // Main Render Loop
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -123,8 +133,35 @@ export default function CanvasGrid() {
     let animationFrameId: number;
 
     const render = () => {
-      // 1. Momentum Physics
-      if (!isDraggingRef.current) {
+      // Handle Auto Zoom
+      if (targetScaleRef.current !== null) {
+        setScale(prev => {
+          const diff = targetScaleRef.current! - prev;
+          if (Math.abs(diff) < 0.005) {
+            targetScaleRef.current = null;
+            return prev;
+          }
+          return prev + diff * 0.05;
+        });
+      }
+
+      // 1. Momentum Physics & Agent Tracking
+      const currentTrackedId = useTelemetry.getState().trackedAgentId;
+      if (currentTrackedId && !isDraggingRef.current) {
+        const p = agentsLerpRef.current.get(currentTrackedId);
+        if (p) {
+          const cellSize = 20;
+          const targetX = p.x * cellSize + cellSize / 2;
+          const targetY = p.y * cellSize + cellSize / 2;
+          const newOffsetX = (canvas.width / 2) - targetX * scaleRef.current;
+          const newOffsetY = (canvas.height / 2) - targetY * scaleRef.current;
+          // Smooth pan to target
+          setOffset(prev => ({
+            x: prev.x + (newOffsetX - prev.x) * 0.1,
+            y: prev.y + (newOffsetY - prev.y) * 0.1
+          }));
+        }
+      } else if (!isDraggingRef.current) {
         if (Math.abs(velocityRef.current.x) > 0.05 || Math.abs(velocityRef.current.y) > 0.05) {
           setOffset(prev => ({
             x: prev.x + velocityRef.current.x,
