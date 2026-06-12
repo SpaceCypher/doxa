@@ -142,6 +142,10 @@ Project Doxa is divided into two primary layers:
 | ![Theory Manual](screenshots/image%20copy.png) | ![Demiurgic Interventions](screenshots/SCR-20260609-prxx.png) |
 | Overview of the sociological and psychological frameworks powering Doxa. | Tools to inject famines, plagues, miracles, and beliefs directly into the world. |
 
+| Custom Genesis Settings | |
+|:---:|:---:|
+| ![Genesis Settings](screenshots/genesis.png) | |
+| Fine-tune starting populations, environmental scarcity, and personality traits before igniting the simulation. | |
 ---
 
 ## License
