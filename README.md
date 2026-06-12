@@ -141,3 +141,10 @@ Project Doxa is divided into two primary layers:
 |:---:|:---:|
 | ![Theory Manual](screenshots/image%20copy.png) | ![Demiurgic Interventions](screenshots/SCR-20260609-prxx.png) |
 | Overview of the sociological and psychological frameworks powering Doxa. | Tools to inject famines, plagues, miracles, and beliefs directly into the world. |
+
+---
+
+## License
+
+This project is licensed under the **GNU Affero General Public License v3.0 (AGPLv3)**. 
+See the [LICENSE](LICENSE) file for details.
