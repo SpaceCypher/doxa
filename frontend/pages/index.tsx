@@ -24,6 +24,7 @@ export default function Home() {
 
   // When agents arrive for the first time after genesis, dismiss loading overlay and mark as running
   useEffect(() => {
+    // wasInitializingRef guards against persisted agent data triggering this on mount
     if (wasInitializingRef.current && agents && agents.length > 0) {
       setIsInitializingWorld(false);
       setIsRunning(true);
@@ -31,8 +32,13 @@ export default function Home() {
     }
   }, [agents]);
 
-  // Wrapper: arming setIsInitializingWorld also primes the ref watcher
+  // Wrapper: arming setIsInitializingWorld wipes persisted agent data + primes the ref watcher
   const armInitializingWorld = (val: boolean) => {
+    if (val) {
+      // Clear any persisted agents from previous session so the effect
+      // only fires on FRESH agents arriving from the new genesis WebSocket payload
+      useTelemetry.setState({ agents: [], world_map: [], world_seed: null, tick: 0 });
+    }
     wasInitializingRef.current = val;
     setIsInitializingWorld(val);
   };
