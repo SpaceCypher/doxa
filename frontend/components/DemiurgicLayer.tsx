@@ -5,7 +5,7 @@ import { TooltipIcon } from './TooltipIcon';
 import { getSessionId } from '../utils/session';
 import { BACKEND_URL } from '../utils/api';
 
-export const DemiurgicLayer: React.FC<{ onClose?: () => void, isRunning?: boolean, setIsInitializingWorld?: (val: boolean) => void }> = ({ onClose, isRunning, setIsInitializingWorld }) => {
+export const DemiurgicLayer: React.FC<{ onClose?: () => void, isRunning?: boolean, setIsInitializingWorld?: (val: boolean) => void, onNeedApiKey?: () => void }> = ({ onClose, isRunning, setIsInitializingWorld, onNeedApiKey }) => {
   const agents = useTelemetry((state) => state.agents);
 
   // By default, if there are no agents and the simulation isn't running, we are in Genesis mode
@@ -114,8 +114,14 @@ export const DemiurgicLayer: React.FC<{ onClose?: () => void, isRunning?: boolea
   };
 
   const triggerGenesis = async () => {
+    // ── BYOK gate ───────────────────────────────────────────────────
+    const apiKey = localStorage.getItem('doxa_api_key');
+    if (!apiKey) {
+      if (onNeedApiKey) onNeedApiKey();
+      return;
+    }
+    // ───────────────────────────────────────────────────────────────
     try {
-      const apiKey = localStorage.getItem('doxa_api_key');
       const payload = {
         ...genesisConfig,
         session_id: getSessionId(),

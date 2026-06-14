@@ -98,17 +98,23 @@ export default function Home() {
 
   const startSimulation = async () => {
     if (isProcessing) return;
+    // ── BYOK gate ─────────────────────────────────────────────────────
+    const apiKey = localStorage.getItem('doxa_api_key');
+    if (!apiKey) {
+      setShowApiKeyModal(true);
+      return;
+    }
+    // ──────────────────────────────────────────────────────────────────
     setIsProcessing(true);
     armInitializingWorld(true);
     try {
       const sessionId = getSessionId();
-      const apiKey = localStorage.getItem('doxa_api_key');
       await fetch(`${BACKEND_URL}/api/session/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           session_id: sessionId,
-          api_key: apiKey || undefined
+          api_key: apiKey
         })
       });
       // Don't set isRunning here — the agent-arrival effect will do it
@@ -692,6 +698,7 @@ export default function Home() {
               onClose={() => setIsGenesisOpen(false)} 
               isRunning={isRunning} 
               setIsInitializingWorld={armInitializingWorld}
+              onNeedApiKey={() => { setIsGenesisOpen(false); setShowApiKeyModal(true); }}
             />
           </div>
         </div>
