@@ -3,11 +3,7 @@ services:
     name: doxa-backend
     env: docker
     rootDir: backend
-    plan: starter
-    disk:
-      name: doxa-data
-      mountPath: /app/data
-      sizeGB: 1
+    plan: free
     envVars:
       - key: GEMINI_API_KEY
         sync: false
