@@ -5,7 +5,7 @@ import { TooltipIcon } from './TooltipIcon';
 import { getSessionId } from '../utils/session';
 import { BACKEND_URL } from '../utils/api';
 
-export const DemiurgicLayer: React.FC<{ onClose?: () => void, isRunning?: boolean }> = ({ onClose, isRunning }) => {
+export const DemiurgicLayer: React.FC<{ onClose?: () => void, isRunning?: boolean, setIsInitializingWorld?: (val: boolean) => void }> = ({ onClose, isRunning, setIsInitializingWorld }) => {
   const agents = useTelemetry((state) => state.agents);
 
   // By default, if there are no agents and the simulation isn't running, we are in Genesis mode
@@ -125,20 +125,28 @@ export const DemiurgicLayer: React.FC<{ onClose?: () => void, isRunning?: boolea
 
       useTelemetry.setState({ centralLogs: [] });
 
+      if (setIsInitializingWorld) setIsInitializingWorld(true);
+
       const res = await fetch(`${BACKEND_URL}/api/session/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
       if (res.ok) {
-        showStatus('Custom Genesis executed! Simulation starting.');
+        showStatus('Custom Genesis executed! World generating...');
         setShowGenesis(false);
+        if (onClose) onClose();
       } else {
         showStatus('Failed to execute custom genesis.');
+        // Dismiss overlay on failure
+        if (setIsInitializingWorld) setIsInitializingWorld(false);
       }
     } catch (e) {
       showStatus('Error triggering genesis.');
+      // Dismiss overlay on error
+      if (setIsInitializingWorld) setIsInitializingWorld(false);
     }
+    // NOTE: no finally dismissal — overlay stays until agents arrive via WebSocket
   };
 
   const [beliefTargetType, setBeliefTargetType] = useState<'agent' | 'civ'>('agent');

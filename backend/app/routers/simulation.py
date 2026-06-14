@@ -131,31 +131,34 @@ async def start_session(config: SimulationConfigPayload):
             session.commit()
             
             # Seed the world environment with starting resources
-            state = session.exec(select(GlobalState).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get())).first()
-            if state:
-                cpr = dict(state.common_pool_resources) if state.common_pool_resources else {}
-                cpr["wood"] = config.start_env_wood
-                cpr["water"] = config.start_env_water
-                cpr["stone"] = config.start_env_stone
-                cpr["gold"] = config.start_env_gold
-                cpr["reproduction_settings"] = {
-                    "vitals_threshold": config.reproduction_vitals_threshold,
-                    "radius": config.reproduction_radius,
-                    "base_chance": config.reproduction_base_chance
-                }
-                state.common_pool_resources = cpr
-                
-                # Generate world map
-                from ..services.world_builder import generate_world
-                seed, world_map = generate_world(config.seed, 100, 100)
-                state.world_seed = seed
-                state.world_map = world_map
-                
-                from sqlalchemy.orm.attributes import flag_modified
-                flag_modified(state, "common_pool_resources")
-                flag_modified(state, "world_map")
+            state = session.exec(select(GlobalState).where(GlobalState.session_id == current_session_id.get())).first()
+            if not state:
+                state = GlobalState(session_id=current_session_id.get(), current_tick=0)
                 session.add(state)
-                session.commit()
+                
+            cpr = dict(state.common_pool_resources) if state.common_pool_resources else {}
+            cpr["wood"] = config.start_env_wood
+            cpr["water"] = config.start_env_water
+            cpr["stone"] = config.start_env_stone
+            cpr["gold"] = config.start_env_gold
+            cpr["reproduction_settings"] = {
+                "vitals_threshold": config.reproduction_vitals_threshold,
+                "radius": config.reproduction_radius,
+                "base_chance": config.reproduction_base_chance
+            }
+            state.common_pool_resources = cpr
+            
+            # Generate world map
+            from ..services.world_builder import generate_world
+            seed, world_map = generate_world(config.seed, 100, 100)
+            state.world_seed = seed
+            state.world_map = world_map
+            
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(state, "common_pool_resources")
+            flag_modified(state, "world_map")
+            session.add(state)
+            session.commit()
                 
     physics.start(config.session_id, get_broadcast_callback(config.session_id))
     return {"status": "started", "session_id": config.session_id}

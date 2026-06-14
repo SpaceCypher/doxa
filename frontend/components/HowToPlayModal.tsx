@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { X, Book, Info, Map as MapIcon, Zap, Activity, Users, BrainCircuit, List, Target, Hexagon, FlaskConical, Globe, ScrollText, Settings2 } from 'lucide-react';
+import { X, Book, Info, Map as MapIcon, Zap, Activity, Users, BrainCircuit, List, Target, Hexagon, FlaskConical, Globe, ScrollText, Settings2, Play, ChevronRight } from 'lucide-react';
 
 interface HowToPlayModalProps {
   onClose: () => void;
 }
 
-type Page = 'intro' | 'philosophy' | 'dashboard' | 'telemetry' | 'cognition' | 'genesis' | 'godmode';
+type Page = 'intro' | 'philosophy' | 'dashboard' | 'telemetry' | 'cognition' | 'genesis' | 'godmode' | 'demo';
 
 export const HowToPlayModal: React.FC<HowToPlayModalProps> = ({ onClose }) => {
   const [dontShowAgain, setDontShowAgain] = useState(false);
@@ -29,6 +29,7 @@ export const HowToPlayModal: React.FC<HowToPlayModalProps> = ({ onClose }) => {
 
   const navItems = [
     { id: 'intro',      label: 'Introduction',      icon: Info },
+    { id: 'demo',       label: 'Demo Play',          icon: Play },
     { id: 'philosophy', label: 'Research & Theory',  icon: FlaskConical },
     { id: 'dashboard',  label: 'The Dashboard',      icon: MapIcon },
     { id: 'telemetry',  label: 'Telemetry & Logs',   icon: Activity },
@@ -335,6 +336,187 @@ export const HowToPlayModal: React.FC<HowToPlayModalProps> = ({ onClose }) => {
                     <img src="/screenshots/SCR-20260609-padp.png" alt="Cultural Records panel titled 'Akashic Records: CIV_A' showing no history recorded yet, indicating the civilization is very young." className="w-full h-auto" />
                     <p className="text-xs text-[#6B6458] px-3 py-2 bg-[#111110]">The Culture → Akashic Records panel stores the accumulated cultural history of a civilization: major events, belief shifts, wars, and miracles witnessed.</p>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── DEMO PLAY ── */}
+            {activePage === 'demo' && (
+              <div className="space-y-8 animate-in fade-in duration-300">
+                <div className="flex items-center gap-3">
+                  <Play className="w-7 h-7 text-[#7A8A58]" />
+                  <h3 className="text-3xl font-black uppercase tracking-widest text-[#E7E1D5]">Demo Play — Your First Simulation</h3>
+                </div>
+                <p className="text-[#A8A08F] leading-relaxed">
+                  A complete guided walkthrough from a blank screen to a fully running civilization. Follow each step in order. Takes about <strong className="text-[#E7E1D5]">5 minutes</strong> to complete.
+                </p>
+
+                <div className="relative">
+                  {/* Vertical timeline line */}
+                  <div className="absolute left-5 top-0 bottom-0 w-px bg-[#3B3A35]" />
+
+                  {/* STEP 1 */}
+                  <div className="relative pl-14 pb-10">
+                    <div className="absolute left-0 top-0 w-10 h-10 rounded-full bg-[#C49A53] flex items-center justify-center font-black text-[#111110] text-sm shrink-0">1</div>
+                    <div className="space-y-3">
+                      <h4 className="text-lg font-black uppercase tracking-wider text-[#C49A53]">Click "Genesis" to Configure Your World</h4>
+                      <p className="text-[#A8A08F] text-sm leading-relaxed">
+                        Hit the golden <strong className="text-[#E7E1D5]">GENESIS</strong> button in the top-center bar. A panel slides open with two columns — one for each civilization (Civ A and Civ B). Here's what every setting means:
+                      </p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                        <div className="bg-[#1A1A18] border border-[#3B3A35] rounded-lg p-4 space-y-2">
+                          <p className="text-xs font-black uppercase tracking-wider text-[#6C8BC4]">Per-Civilization Settings</p>
+                          <ul className="space-y-2.5 text-sm text-[#A8A08F]">
+                            <li className="flex gap-2"><ChevronRight className="w-3 h-3 mt-0.5 text-[#C49A53] shrink-0" /><span><strong className="text-[#E7E1D5]">Population</strong> — Number of agents spawned at start. Try <strong className="text-white">10 each</strong> for a balanced, watchable run. More agents = richer culture, heavier computation.</span></li>
+                            <li className="flex gap-2"><ChevronRight className="w-3 h-3 mt-0.5 text-[#C49A53] shrink-0" /><span><strong className="text-[#E7E1D5]">α Alpha — Memory</strong> — How heavily past experiences shape decisions. <strong className="text-white">0.7</strong> = tradition-bound agents who learn from history. Low α = short-sighted, highly adaptive.</span></li>
+                            <li className="flex gap-2"><ChevronRight className="w-3 h-3 mt-0.5 text-[#C49A53] shrink-0" /><span><strong className="text-[#E7E1D5]">β Beta — Social</strong> — Cooperation tendency. Try Civ A at <strong className="text-[#7A8A58]">0.8</strong> (cooperative) and Civ B at <strong className="text-[#B95D3D]">0.2</strong> (isolationist) for natural cultural tension between two very different societies.</span></li>
+                            <li className="flex gap-2"><ChevronRight className="w-3 h-3 mt-0.5 text-[#C49A53] shrink-0" /><span><strong className="text-[#E7E1D5]">γ Gamma — Aggression</strong> — Propensity to attack. Keep both low (<strong className="text-white">0.2</strong>) to start — let culture form before war. You can always inject aggression later via the Demiurgic Layer.</span></li>
+                          </ul>
+                        </div>
+                        <div className="bg-[#1A1A18] border border-[#3B3A35] rounded-lg p-4 space-y-2">
+                          <p className="text-xs font-black uppercase tracking-wider text-[#7A8A58]">Global World Settings</p>
+                          <ul className="space-y-2.5 text-sm text-[#A8A08F]">
+                            <li className="flex gap-2"><ChevronRight className="w-3 h-3 mt-0.5 text-[#C49A53] shrink-0" /><span><strong className="text-[#E7E1D5]">Initial Food / Wood / Water</strong> — Each agent's personal starting inventory. Food <strong className="text-white">50</strong>, Wood <strong className="text-white">30</strong>, Water <strong className="text-white">50</strong> is comfortable. Dropping Food to 10 creates an immediate survival crisis.</span></li>
+                            <li className="flex gap-2"><ChevronRight className="w-3 h-3 mt-0.5 text-[#C49A53] shrink-0" /><span><strong className="text-[#E7E1D5]">Env Wood / Water (CPR)</strong> — Total environmental reserves shared by all agents. Set both to <strong className="text-white">500</strong> for a balanced world. Drop to 100 for resource scarcity and conflict.</span></li>
+                            <li className="flex gap-2"><ChevronRight className="w-3 h-3 mt-0.5 text-[#C49A53] shrink-0" /><span><strong className="text-[#E7E1D5]">Initial Health / Satiety / Stamina</strong> — Starting vitals for every agent. Full stats (100 each) = thriving start. Reduce to trigger early desperation behaviours.</span></li>
+                            <li className="flex gap-2"><ChevronRight className="w-3 h-3 mt-0.5 text-[#C49A53] shrink-0" /><span><strong className="text-[#E7E1D5]">Vitals Threshold</strong> — Minimum health + satiety an agent needs before they can reproduce. Default <strong className="text-white">120</strong> means only thriving agents breed.</span></li>
+                            <li className="flex gap-2"><ChevronRight className="w-3 h-3 mt-0.5 text-[#C49A53] shrink-0" /><span><strong className="text-[#E7E1D5]">World Seed</strong> — Leave blank for a random map. Enter the same number later to replay the exact same terrain layout.</span></li>
+                          </ul>
+                        </div>
+                      </div>
+                      <div className="mt-3 border border-[#7A8A58]/40 bg-[#7A8A58]/5 rounded-lg p-4">
+                        <p className="text-xs font-bold uppercase tracking-wider text-[#7A8A58] mb-1.5">✦ Recommended Starter Config</p>
+                        <p className="text-sm text-[#A8A08F]">Population: <strong className="text-white">10 per civ</strong> · α: <strong className="text-white">0.7</strong> · β: <strong className="text-white">0.6</strong> · γ: <strong className="text-white">0.2</strong> · Food/Water: <strong className="text-white">50</strong> · Wood: <strong className="text-white">30</strong> · Env CPR: <strong className="text-white">500</strong> · Health/Satiety/Stamina: <strong className="text-white">100</strong></p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* STEP 2 */}
+                  <div className="relative pl-14 pb-10">
+                    <div className="absolute left-0 top-0 w-10 h-10 rounded-full bg-[#7A8A58] flex items-center justify-center font-black text-[#111110] text-sm shrink-0">2</div>
+                    <div className="space-y-3">
+                      <h4 className="text-lg font-black uppercase tracking-wider text-[#7A8A58]">Hit "Ignite Genesis" and Watch the World Form</h4>
+                      <p className="text-[#A8A08F] text-sm leading-relaxed">
+                        Click <strong className="text-[#E7E1D5]">IGNITE GENESIS / AWAKEN DEMIURGE</strong> at the bottom of the Genesis panel. A full-screen loading overlay will appear — <em>do not refresh the page</em>. The backend is running a procedural noise algorithm to generate the terrain map. This takes ~15 seconds.
+                      </p>
+                      <p className="text-[#A8A08F] text-sm leading-relaxed">
+                        Once complete, the map materialises — <strong className="text-white">dark blue</strong> tiles are water, <strong className="text-[#C49A53]">sandy</strong> tiles are desert, <strong className="text-[#7A8A58]">green</strong> tiles are grassland and forest. Your agents appear as small coloured dots. <strong className="text-[#6C8BC4]">Blue dots = Civ A.</strong> <strong className="text-[#8D6AB0]">Purple dots = Civ B.</strong>
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* STEP 3 */}
+                  <div className="relative pl-14 pb-10">
+                    <div className="absolute left-0 top-0 w-10 h-10 rounded-full bg-[#6C8BC4] flex items-center justify-center font-black text-[#111110] text-sm shrink-0">3</div>
+                    <div className="space-y-3">
+                      <h4 className="text-lg font-black uppercase tracking-wider text-[#6C8BC4]">Watch the First 10 Ticks — Early Survival</h4>
+                      <p className="text-[#A8A08F] text-sm leading-relaxed">
+                        Every tick, each agent makes a decision. In the first ~10 ticks you'll mostly see <strong className="text-[#E7E1D5]">FARM</strong> and <strong className="text-[#E7E1D5]">MOVE</strong> states — agents are simply gathering food and water to survive.
+                      </p>
+                      <div className="bg-[#1A1A18] border border-[#3B3A35] rounded-lg p-4 space-y-1.5">
+                        <p className="text-xs font-black uppercase tracking-wider text-[#C49A53] mb-2">What to look at right now:</p>
+                        <div className="flex gap-2 text-sm text-[#A8A08F]"><ChevronRight className="w-3 h-3 mt-0.5 text-[#7A8A58] shrink-0" /><span>Open the <strong className="text-[#E7E1D5]">Live Activity</strong> feed (left panel) — agent inner-monologues update in real time: <em className="text-[#C49A53]">"I need food. I should gather resources nearby."</em></span></div>
+                        <div className="flex gap-2 text-sm text-[#A8A08F]"><ChevronRight className="w-3 h-3 mt-0.5 text-[#7A8A58] shrink-0" /><span>Open <strong className="text-[#E7E1D5]">Telemetry</strong> (right panel) — watch the Asabiyyah Index for both civs. It starts at 1.0 and fluctuates based on cooperation vs. competition.</span></div>
+                        <div className="flex gap-2 text-sm text-[#A8A08F]"><ChevronRight className="w-3 h-3 mt-0.5 text-[#7A8A58] shrink-0" /><span>Open <strong className="text-[#E7E1D5]">Directory</strong> — see each agent's Food, Wood, and Water inventory updating live.</span></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* STEP 4 */}
+                  <div className="relative pl-14 pb-10">
+                    <div className="absolute left-0 top-0 w-10 h-10 rounded-full bg-[#8D6AB0] flex items-center justify-center font-black text-[#111110] text-sm shrink-0">4</div>
+                    <div className="space-y-3">
+                      <h4 className="text-lg font-black uppercase tracking-wider text-[#8D6AB0]">Inspect an Agent's Mind (Ticks 10–20)</h4>
+                      <p className="text-[#A8A08F] text-sm leading-relaxed">
+                        By tick 10, agents have accumulated their first memories. Now is the perfect time to peer inside one.
+                      </p>
+                      <ol className="list-decimal pl-5 space-y-1.5 text-sm text-[#A8A08F]">
+                        <li>Click <strong className="text-[#E7E1D5]">Directory</strong> → find any agent → click <strong className="text-[#E7E1D5]">INSPECT</strong>.</li>
+                        <li>The <strong className="text-[#E7E1D5]">Cognitive Inspector</strong> opens. Left side: their vitals (Health, Satiety, Stamina) and Working Memory — their current inner monologue shown verbatim.</li>
+                        <li>Right side: their <strong className="text-[#E7E1D5]">Belief Graph</strong>. At this early stage, most beliefs are Functional — survival rules like <em className="text-[#C49A53]">"gather food before dark"</em> or <em className="text-[#C49A53]">"water sources are precious."</em></li>
+                        <li>Click any node in the Belief Graph to see: full belief text, <strong className="text-[#E7E1D5]">Utility</strong> (how much they value it), <strong className="text-[#E7E1D5]">Confidence</strong> (how certain they are it's true), and <strong className="text-[#E7E1D5]">Stability</strong> (how hard it is to change).</li>
+                      </ol>
+                    </div>
+                  </div>
+
+                  {/* STEP 5 */}
+                  <div className="relative pl-14 pb-10">
+                    <div className="absolute left-0 top-0 w-10 h-10 rounded-full bg-[#B95D3D] flex items-center justify-center font-black text-[#111110] text-sm shrink-0">5</div>
+                    <div className="space-y-3">
+                      <h4 className="text-lg font-black uppercase tracking-wider text-[#B95D3D]">Trigger Your First Intervention — Famine</h4>
+                      <p className="text-[#A8A08F] text-sm leading-relaxed">
+                        Now let's be a god. Click <strong className="text-[#E7E1D5]">GENESIS</strong> while the simulation is running. Then click the <strong className="text-[#B95D3D]">☠ FAMINE</strong> button.
+                      </p>
+                      <div className="bg-[#B95D3D]/10 border border-[#B95D3D]/30 rounded-lg p-4 space-y-1.5">
+                        <p className="text-xs font-black uppercase tracking-wider text-[#B95D3D] mb-2">What happens:</p>
+                        <div className="flex gap-2 text-sm text-[#A8A08F]"><ChevronRight className="w-3 h-3 mt-0.5 text-[#B95D3D] shrink-0" /><span>All environmental Food resources vanish from the map instantly.</span></div>
+                        <div className="flex gap-2 text-sm text-[#A8A08F]"><ChevronRight className="w-3 h-3 mt-0.5 text-[#B95D3D] shrink-0" /><span>Agents with empty personal stockpiles begin to starve. Their Satiety drops and reasoning shifts — cooperation either spikes (sharing food) or collapses (raiding neighbours).</span></div>
+                        <div className="flex gap-2 text-sm text-[#A8A08F]"><ChevronRight className="w-3 h-3 mt-0.5 text-[#B95D3D] shrink-0" /><span>Watch the <strong className="text-[#E7E1D5]">Asabiyyah Index</strong> in Telemetry — it will either rise (cooperative response) or plummet (violent response).</span></div>
+                        <div className="flex gap-2 text-sm text-[#A8A08F]"><ChevronRight className="w-3 h-3 mt-0.5 text-[#B95D3D] shrink-0" /><span>The Activity Feed will shift from <em className="text-[#C49A53]">"I should explore"</em> to <em className="text-[#C49A53]">"I am starving. I must find food or I will die."</em></span></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* STEP 6 */}
+                  <div className="relative pl-14 pb-10">
+                    <div className="absolute left-0 top-0 w-10 h-10 rounded-full bg-[#C49A53] flex items-center justify-center font-black text-[#111110] text-sm shrink-0">6</div>
+                    <div className="space-y-3">
+                      <h4 className="text-lg font-black uppercase tracking-wider text-[#C49A53]">Inject a Belief — Shape an Ideology</h4>
+                      <p className="text-[#A8A08F] text-sm leading-relaxed">
+                        In the Genesis panel, scroll to <strong className="text-[#E7E1D5]">Inject Mass Belief</strong>. This is the most powerful tool in the entire system.
+                      </p>
+                      <ol className="list-decimal pl-5 space-y-1.5 text-sm text-[#A8A08F]">
+                        <li>Switch toggle to <strong className="text-[#E7E1D5]">Civilization</strong> and select <strong className="text-[#E7E1D5]">Civ B</strong>.</li>
+                        <li>Set Belief Type to <strong className="text-[#E7E1D5]">Theological</strong>.</li>
+                        <li>Choose preset <strong className="text-[#E7E1D5]">Xenophobia</strong>, which pre-fills: <em className="text-[#C49A53]">"Anyone not of our civilization is a threat and must be eliminated."</em></li>
+                        <li>Set weight to <strong className="text-[#E7E1D5]">3.0</strong> — this is a <strong className="text-[#B95D3D]">DIVINE DIRECTIVE</strong>, treated as absolute truth by all recipients.</li>
+                        <li>Click <strong className="text-[#E7E1D5]">INJECT COMMANDMENT</strong>.</li>
+                      </ol>
+                      <p className="text-[#A8A08F] text-sm leading-relaxed mt-1">
+                        Watch what happens over the next few ticks. Every Civ B agent now carries this belief as near-absolute truth. Their actions shift. <strong className="text-[#E7E1D5]">ATTK</strong> (attack) states start appearing on Civ B agents as they move toward Civ A territory.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* STEP 7 */}
+                  <div className="relative pl-14 pb-10">
+                    <div className="absolute left-0 top-0 w-10 h-10 rounded-full bg-[#7A8A58] flex items-center justify-center font-black text-[#111110] text-sm shrink-0">7</div>
+                    <div className="space-y-3">
+                      <h4 className="text-lg font-black uppercase tracking-wider text-[#7A8A58]">Force a Dream Cycle — Crystallise the Culture</h4>
+                      <p className="text-[#A8A08F] text-sm leading-relaxed">
+                        After a few ticks of conflict, hit <strong className="text-[#E7E1D5]">🌙 DREAM</strong> in the Genesis panel. This forces all agents into a global sleep cycle where short-term episodic memories are consolidated into long-term beliefs.
+                      </p>
+                      <p className="text-[#A8A08F] text-sm leading-relaxed">
+                        After the dream, open any agent's Cognitive Inspector → <strong className="text-[#E7E1D5]">Psychological State</strong> tab. You'll see war memories written into their episodic memory, and new Theological beliefs may have formed spontaneously — agents trying to explain <em>why</em> they fought, why they won, why others died. This is where theology is born.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* STEP 8 */}
+                  <div className="relative pl-14">
+                    <div className="absolute left-0 top-0 w-10 h-10 rounded-full bg-[#E7E1D5] flex items-center justify-center font-black text-[#111110] text-sm shrink-0">8</div>
+                    <div className="space-y-3">
+                      <h4 className="text-lg font-black uppercase tracking-wider text-[#E7E1D5]">From Here — The World is Yours</h4>
+                      <p className="text-[#A8A08F] text-sm leading-relaxed">
+                        You've seen the full loop: Genesis → Survival → Culture Formation → Divine Intervention → War → Memory Consolidation → Emergent Ideology. Everything from here unfolds from these foundations, without your input.
+                      </p>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+                        <div className="bg-[#1A1A18] border border-[#6C8BC4]/40 rounded-lg p-4 space-y-1.5">
+                          <p className="text-xs font-black uppercase tracking-wider text-[#6C8BC4]">Try next: Miracle</p>
+                          <p className="text-xs text-[#A8A08F]">After Famine + War, drop a Miracle on Civ A. Watch if Civ B interprets it as divine favour for their enemies — and whether it triggers theological crisis or escalation.</p>
+                        </div>
+                        <div className="bg-[#1A1A18] border border-[#8D6AB0]/40 rounded-lg p-4 space-y-1.5">
+                          <p className="text-xs font-black uppercase tracking-wider text-[#8D6AB0]">Try next: Plague</p>
+                          <p className="text-xs text-[#A8A08F]">Halve everyone's health mid-war. Weakened agents may call a ceasefire — or see plague as divine punishment and double down. The LLM decides, not you.</p>
+                        </div>
+                        <div className="bg-[#1A1A18] border border-[#7A8A58]/40 rounded-lg p-4 space-y-1.5">
+                          <p className="text-xs font-black uppercase tracking-wider text-[#7A8A58]">Try next: Peaceful Run</p>
+                          <p className="text-xs text-[#A8A08F]">Start fresh with both civs at β=0.9, γ=0.1. Watch trade, building, and spontaneous alliances emerge with zero intervention at all.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                 </div>
               </div>
             )}

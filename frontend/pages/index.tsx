@@ -19,6 +19,23 @@ export default function Home() {
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
+  const [isInitializingWorld, setIsInitializingWorld] = useState(false);
+  const wasInitializingRef = useRef(false);
+
+  // When agents arrive for the first time after genesis, dismiss loading overlay and mark as running
+  useEffect(() => {
+    if (wasInitializingRef.current && agents && agents.length > 0) {
+      setIsInitializingWorld(false);
+      setIsRunning(true);
+      wasInitializingRef.current = false;
+    }
+  }, [agents]);
+
+  // Wrapper: arming setIsInitializingWorld also primes the ref watcher
+  const armInitializingWorld = (val: boolean) => {
+    wasInitializingRef.current = val;
+    setIsInitializingWorld(val);
+  };
 
   // UI State toggles
   const [isGenesisOpen, setIsGenesisOpen] = useState(false);
@@ -76,6 +93,7 @@ export default function Home() {
   const startSimulation = async () => {
     if (isProcessing) return;
     setIsProcessing(true);
+    armInitializingWorld(true);
     try {
       const sessionId = getSessionId();
       const apiKey = localStorage.getItem('doxa_api_key');
@@ -87,8 +105,11 @@ export default function Home() {
           api_key: apiKey || undefined
         })
       });
-      setIsRunning(true);
-    } catch (e) {} finally {
+      // Don't set isRunning here — the agent-arrival effect will do it
+    } catch (e) {
+      // On failure, dismiss overlay immediately
+      armInitializingWorld(false);
+    } finally {
       setIsProcessing(false);
     }
   };
@@ -140,6 +161,23 @@ export default function Home() {
         </div>
       </div>
 
+      {/* 1.5. WORLD INITIALIZATION OVERLAY */}
+      {isInitializingWorld && (
+        <div className="absolute inset-0 z-[35] bg-[#050505]/90 backdrop-blur-md flex flex-col items-center justify-center p-4">
+          <Globe className="w-16 h-16 text-[#7A8A58] animate-pulse mb-6" />
+          <h2 className="text-2xl font-black uppercase tracking-[0.3em] text-[#E7E1D5] mb-2 text-center">Initializing World</h2>
+          <p className="text-[#A8A08F] text-xs max-w-md text-center font-mono">
+            Generating geographical matrices via multidimensional noise fractals...<br/>
+            This requires ~15 seconds of compute. Do not refresh.
+          </p>
+          <div className="mt-8 flex items-center justify-center gap-1">
+            <div className="w-2 h-2 bg-[#7A8A58] rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+            <div className="w-2 h-2 bg-[#7A8A58] rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+            <div className="w-2 h-2 bg-[#7A8A58] rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+          </div>
+        </div>
+      )}
+
       {/* RESPONSIVE TOP HEADER */}
       <div className="absolute top-4 left-4 right-8 z-20 pointer-events-none flex justify-between items-start gap-4">
         
@@ -153,9 +191,16 @@ export default function Home() {
             <div className="flex flex-col gap-0.5">
               <div className="flex items-center gap-2">
                 {connected ? <Wifi className="w-3 h-3 text-[#7A8A58] animate-pulse" /> : <WifiOff className="w-3 h-3 text-[#B95D3D]" />}
-                <span className={`text-[9px] font-bold tracking-widest uppercase ${connected ? 'text-[#7A8A58]' : 'text-[#B95D3D]'}`}>
-                  {connected ? 'LINK ESTABLISHED' : 'LINK SEVERED'}
-                </span>
+                <div className="flex flex-col gap-0">
+                  <span className={`text-[9px] font-bold tracking-widest uppercase ${connected ? 'text-[#7A8A58]' : 'text-[#B95D3D]'}`}>
+                    {connected ? 'LINK ESTABLISHED' : 'LINK SEVERED'}
+                  </span>
+                  {!connected && (
+                    <span className="text-[8px] font-bold tracking-widest uppercase text-[#B95D3D] opacity-70 animate-pulse">
+                      RECONNECTING...
+                    </span>
+                  )}
+                </div>
               </div>
               {world_seed !== null && (
                 <span className="text-[9px] font-mono tracking-widest text-[#C49A53] pl-5">
@@ -211,26 +256,30 @@ export default function Home() {
         {/* RIGHT COMPONENT: OVERLAY TOGGLES */}
         <div className="pointer-events-auto flex bg-[#111110]/95 backdrop-blur border border-[#3B3A35] rounded shadow-2xl overflow-hidden h-10 shrink-0">
           <button 
+            disabled={isInitializingWorld}
             onClick={() => setActiveSlideout(activeSlideout === 'directory' ? 'none' : 'directory')}
-            className={`px-4 font-bold uppercase tracking-widest text-xs flex items-center gap-2 transition-all border-r border-[#3B3A35] ${activeSlideout === 'directory' ? 'bg-[#E7E1D5] text-[#111110]' : 'text-[#A8A08F] hover:bg-[#1A1A18] hover:text-white'}`}
+            className={`px-4 font-bold uppercase tracking-widest text-xs flex items-center gap-2 transition-all border-r border-[#3B3A35] disabled:opacity-50 disabled:cursor-not-allowed ${activeSlideout === 'directory' ? 'bg-[#E7E1D5] text-[#111110]' : 'text-[#A8A08F] hover:bg-[#1A1A18] hover:text-white'}`}
           >
             <Users className="w-4 h-4" /> Directory
           </button>
           <button 
+            disabled={isInitializingWorld}
             onClick={() => setActiveSlideout(activeSlideout === 'telemetry' ? 'none' : 'telemetry')}
-            className={`px-4 font-bold uppercase tracking-widest text-xs flex items-center gap-2 transition-all border-r border-[#3B3A35] ${activeSlideout === 'telemetry' ? 'bg-[#E7E1D5] text-[#111110]' : 'text-[#A8A08F] hover:bg-[#1A1A18] hover:text-white'}`}
+            className={`px-4 font-bold uppercase tracking-widest text-xs flex items-center gap-2 transition-all border-r border-[#3B3A35] disabled:opacity-50 disabled:cursor-not-allowed ${activeSlideout === 'telemetry' ? 'bg-[#E7E1D5] text-[#111110]' : 'text-[#A8A08F] hover:bg-[#1A1A18] hover:text-white'}`}
           >
             <Database className="w-4 h-4" /> Telemetry
           </button>
           <button 
+            disabled={isInitializingWorld}
             onClick={() => setActiveSlideout(activeSlideout === 'culture' ? 'none' : 'culture')}
-            className={`px-4 font-bold uppercase tracking-widest text-xs flex items-center gap-2 transition-all border-r border-[#3B3A35] ${activeSlideout === 'culture' ? 'bg-[#E7E1D5] text-[#111110]' : 'text-[#A8A08F] hover:bg-[#1A1A18] hover:text-white'}`}
+            className={`px-4 font-bold uppercase tracking-widest text-xs flex items-center gap-2 transition-all border-r border-[#3B3A35] disabled:opacity-50 disabled:cursor-not-allowed ${activeSlideout === 'culture' ? 'bg-[#E7E1D5] text-[#111110]' : 'text-[#A8A08F] hover:bg-[#1A1A18] hover:text-white'}`}
           >
             <Globe className="w-4 h-4" /> Culture
           </button>
           <button 
+            disabled={isInitializingWorld}
             onClick={() => setShowLegend(!showLegend)}
-            className={`px-4 font-bold uppercase tracking-widest text-xs flex items-center gap-2 transition-all border-r border-[#3B3A35] ${showLegend ? 'bg-[#E7E1D5] text-[#111110]' : 'text-[#A8A08F] hover:bg-[#1A1A18] hover:text-white'}`}
+            className={`px-4 font-bold uppercase tracking-widest text-xs flex items-center gap-2 transition-all border-r border-[#3B3A35] disabled:opacity-50 disabled:cursor-not-allowed ${showLegend ? 'bg-[#E7E1D5] text-[#111110]' : 'text-[#A8A08F] hover:bg-[#1A1A18] hover:text-white'}`}
           >
             <MapIcon className="w-4 h-4" /> Legend
           </button>
@@ -248,8 +297,9 @@ export default function Home() {
         {/* Toggle Button & Filter */}
         <div className="flex items-center gap-2">
           <button 
+            disabled={isInitializingWorld}
             onClick={() => setIsActivityFeedExpanded(!isActivityFeedExpanded)}
-            className={`h-10 px-4 font-bold uppercase tracking-widest text-xs flex items-center gap-2 transition-all bg-[#111110]/95 backdrop-blur border border-[#3B3A35] rounded shadow-2xl flex-1 ${isActivityFeedExpanded ? 'bg-[#E7E1D5] text-[#111110]' : 'text-[#A8A08F] hover:bg-[#1A1A18] hover:text-white'}`}
+            className={`h-10 px-4 font-bold uppercase tracking-widest text-xs flex items-center gap-2 transition-all bg-[#111110]/95 backdrop-blur border border-[#3B3A35] rounded shadow-2xl flex-1 disabled:opacity-50 disabled:cursor-not-allowed ${isActivityFeedExpanded ? 'bg-[#E7E1D5] text-[#111110]' : 'text-[#A8A08F] hover:bg-[#1A1A18] hover:text-white'}`}
           >
             <Activity className="w-4 h-4" />
             Live Activity
@@ -632,7 +682,11 @@ export default function Home() {
             >
               <X className="w-4 h-4" />
             </button>
-            <DemiurgicLayer onClose={() => setIsGenesisOpen(false)} isRunning={isRunning} />
+            <DemiurgicLayer 
+              onClose={() => setIsGenesisOpen(false)} 
+              isRunning={isRunning} 
+              setIsInitializingWorld={armInitializingWorld}
+            />
           </div>
         </div>
       )}
