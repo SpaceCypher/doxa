@@ -3,8 +3,10 @@ uvicorn==0.29.0
 sqlmodel==0.0.18
 websockets>=13.0.0
 python-dotenv==1.0.1
-google-genai
+google-generativeai
 motor>=3.4.0
 perlin-noise==1.12
 chromadb>=0.5.0
 openai>=1.30.0
+pandas
+scipy
