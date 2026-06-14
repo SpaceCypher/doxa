@@ -14,6 +14,8 @@ class AgentLogEntry(BaseModel):
     reasoning: str
 
 class SimulationConfigPayload(BaseModel):
+    session_id: str
+    api_key: Optional[str] = None
     num_agents_civ_a: int = 5
     num_agents_civ_b: int = 5
     civ_a_alpha: float = 0.5
@@ -48,11 +50,13 @@ class TelemetryPayload(BaseModel):
     tech_tree: dict = {}
 
 class EventInjectPayload(BaseModel):
+    session_id: str
     type: str
     severity: str
     location: List[int]
 
 class BeliefInjectPayload(BaseModel):
+    session_id: str
     category: str
     node: str
     weight: float

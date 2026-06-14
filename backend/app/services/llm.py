@@ -4,18 +4,26 @@ from typing import List, Dict
 import json
 from openai import AsyncOpenAI
 
-def get_client():
+session_api_keys = {}
+
+def set_api_key(session_id: str, api_key: str):
+    if api_key:
+        session_api_keys[session_id] = api_key
+
+def get_client(session_id: str):
     provider = os.getenv("LLM_PROVIDER", "groq").lower() # groq or openrouter
     
+    session_key = session_api_keys.get(session_id)
+    
     if provider == "groq":
-        api_key = os.getenv("GROQ_API_KEY")
+        api_key = session_key or os.getenv("GROQ_API_KEY")
         if not api_key:
-            raise ValueError("GROQ_API_KEY is not set.")
+            raise ValueError("GROQ_API_KEY is not set. Please provide an API key.")
         return AsyncOpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1"), "llama-3.1-8b-instant"
     elif provider == "openrouter":
-        api_key = os.getenv("OPENROUTER_API_KEY")
+        api_key = session_key or os.getenv("OPENROUTER_API_KEY")
         if not api_key:
-            raise ValueError("OPENROUTER_API_KEY is not set.")
+            raise ValueError("OPENROUTER_API_KEY is not set. Please provide an API key.")
         return AsyncOpenAI(api_key=api_key, base_url="https://openrouter.ai/api/v1"), "openai/gpt-oss-120b:free"
     else:
         raise ValueError("Unsupported LLM_PROVIDER. Use 'groq' or 'openrouter'.")
@@ -25,8 +33,10 @@ async def batch_infer_actions(prompts: List[Dict[str, str]]) -> List[str]:
     Given a list of prompts (one for each agent), ask the LLM for an action.
     Returns a list of raw string responses.
     """
+    from ..models.db import current_session_id
+    session_id = current_session_id.get()
     try:
-        client, model_name = get_client()
+        client, model_name = get_client(session_id)
     except Exception as e:
         print(f"LLM Client error: {e}")
         return [json.dumps({"action": {"type": "IDLE"}, "thoughts": f"Client error: {str(e)}"}) for _ in prompts]

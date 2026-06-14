@@ -1,7 +1,7 @@
 import json
 import asyncio
 from sqlmodel import Session, select
-from ..models.db import engine, Cognition, GlobalState
+from ..models.db import current_session_id, engine, Cognition, GlobalState
 from .caltrop import validator
 from .llm import get_client
 
@@ -84,7 +84,7 @@ async def run_dream_cycle() -> int:
     """
     processed = 0
     with Session(engine) as session:
-        cognitions = session.exec(select(Cognition)).all()
+        cognitions = session.exec(select(Cognition).where(Cognition.session_id == current_session_id.get()).where(Cognition.session_id == current_session_id.get())).all()
 
         async def process_agent(cog: Cognition):
             logs = list(cog.working_memory) if cog.working_memory else []
@@ -96,7 +96,7 @@ async def run_dream_cycle() -> int:
         tasks = [process_agent(c) for c in cognitions]
         results = await asyncio.gather(*tasks)
 
-        state = session.exec(select(GlobalState).where(GlobalState.session_id == "default")).first()
+        state = session.exec(select(GlobalState).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get())).first()
         current_tick = state.current_tick if state else 0
 
         for res in results:
@@ -106,7 +106,7 @@ async def run_dream_cycle() -> int:
 
             # Fetch agent personality for stubbornness
             from ..models.db import Agent
-            agent = session.exec(select(Agent).where(Agent.agent_id == cog.agent_id)).first()
+            agent = session.exec(select(Agent).where(Agent.session_id == current_session_id.get()).where(Agent.agent_id == cog.agent_id)).first()
             beta = dict(agent.personality).get("beta", 0.5) if agent and agent.personality else 0.5
             civ_id = agent.civilization_id if agent else "civ_a"
             theta = 1.0 - beta  # stubbornness threshold
@@ -189,12 +189,13 @@ async def run_dream_cycle() -> int:
             # ── Write significant theological beliefs to Akashic Records ───
             if new_theological_for_lore:
                 from .lore import add_lore_event
+                pass
                 for theo in new_theological_for_lore:
                     lore_text = (
                         f"Agent {cog.agent_id} developed a new sacred belief: \"{theo['node']}\" "
                         f"(Confidence: {theo['confidence']:.2f}, Stability: {theo['stability']:.2f})"
                     )
-                    add_lore_event(civ_id, lore_text, current_tick, cog.agent_id)
+                    add_lore_event(current_session_id.get(), civ_id, lore_text, current_tick, cog.agent_id)
 
         session.commit()
 

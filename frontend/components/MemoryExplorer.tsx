@@ -218,17 +218,17 @@ export const MemoryExplorer: React.FC<{ graph?: BeliefGraph }> = ({ graph }) => 
       </div>
 
       {/* BOTTOM PANEL - SELECTED BELIEF */}
-      <div className={`border-t border-[#3B3A35] bg-[#111110] transition-all duration-300 ease-in-out ${selectedNodeData ? 'h-[320px] opacity-100' : 'h-0 opacity-0 overflow-hidden'}`}>
+      <div className={`border-t border-[#3B3A35] bg-[#111110] transition-all duration-300 ease-in-out ${selectedNodeData ? 'h-[320px] opacity-100 overflow-y-auto' : 'h-0 opacity-0 overflow-hidden'}`}>
          {selectedNodeData && (
-            <div className="p-6 h-full flex flex-col gap-4">
+            <div className="p-6 min-h-min flex flex-col gap-4">
                <div className="flex items-center gap-2 text-[#A8A08F] font-bold uppercase tracking-widest text-xs mb-2">
                   <ShieldCheck className="w-4 h-4 text-[#C49A53]"/> Selected Belief
                </div>
                
-               <div className="flex items-start justify-between gap-8 h-full">
+               <div className="flex items-stretch justify-between gap-8 min-h-[220px]">
                   
                   {/* Left Desc */}
-                  <div className="flex flex-col w-1/3 h-full">
+                  <div className="flex flex-col w-1/3">
                      <div className="flex items-start gap-4 mb-4">
                         <h3 className="text-xl font-black text-[#E7E1D5] leading-tight">{selectedNodeData.description}</h3>
                         <span className="px-2 py-1 bg-[#24231F] text-[10px] uppercase font-bold tracking-widest border border-[#3B3A35] flex-shrink-0 mt-1">Core Belief</span>
@@ -249,7 +249,7 @@ export const MemoryExplorer: React.FC<{ graph?: BeliefGraph }> = ({ graph }) => 
                   </div>
 
                   {/* Attributes */}
-                  <div className="flex flex-col w-1/4 h-full pt-2">
+                  <div className="flex flex-col w-1/4 pt-2">
                      <div className="text-[10px] font-bold uppercase tracking-widest text-[#A8A08F] mb-4">Attributes</div>
                      
                      <div className="flex flex-col gap-3">
@@ -272,7 +272,7 @@ export const MemoryExplorer: React.FC<{ graph?: BeliefGraph }> = ({ graph }) => 
                   </div>
 
                   {/* Trend Line */}
-                  <div className="flex flex-col w-1/3 h-full pt-2 pr-4 pb-6">
+                  <div className="flex flex-col w-1/3 pt-2 pr-4 pb-6 min-h-[200px]">
                      <div className="text-[10px] font-bold uppercase tracking-widest text-[#A8A08F] mb-4">Utility Trend</div>
                      <div className="flex-1 border-l border-b border-[#3B3A35] relative mb-2">
                         <ResponsiveContainer width="100%" height="100%">

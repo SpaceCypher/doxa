@@ -3,7 +3,7 @@ import math
 import os
 import uuid
 from sqlmodel import Session, select
-from ..models.db import engine, GlobalState, Agent
+from ..models.db import current_session_id, engine, GlobalState, Agent
 from ..models.schemas import TelemetryPayload, AgentState, AgentLogEntry
 
 # Terrain physics definitions
@@ -16,47 +16,57 @@ TERRAIN_TYPES = {
     5: {"name": "Mountain", "move_stamina": 0.0, "health_drain": 0.0, "impassable": True},
 }
 
-is_running = False
-_consecutive_errors = 0   # Bug 3 Fix: track consecutive tick errors
+is_running = False  # Deprecated
+active_tasks = {}
+_consecutive_errors = {}
 _MAX_CONSECUTIVE_ERRORS = 5
 
-god_mode_queue = []
+god_mode_queues = {}
 
-async def tick_loop(broadcast_callback, run_id: str):
-    global is_running, _consecutive_errors
+def start(session_id: str, broadcast_callback):
+    if session_id not in active_tasks:
+        active_tasks[session_id] = asyncio.create_task(tick_loop(broadcast_callback, session_id))
+
+def pause(session_id: str):
+    if session_id in active_tasks:
+        active_tasks[session_id].cancel()
+        del active_tasks[session_id]
+
+async def tick_loop(broadcast_callback, session_id: str):
     try:
         while True:
-            print(f"Loop running: {is_running}")
-            if is_running:
-                try:
-                    await process_tick(broadcast_callback, run_id)
-                    _consecutive_errors = 0  # reset on success
-                except Exception as e:
-                    _consecutive_errors += 1
-                    error_msg = str(e)
-                    print(f"[TICK ERROR #{_consecutive_errors}] {error_msg}")
-                    
-                    # Kill switch for LLM Rate Limits
-                    if "429" in error_msg or "Rate limit" in error_msg or _consecutive_errors >= _MAX_CONSECUTIVE_ERRORS:
-                        is_running = False
-                        reason = "RATE LIMIT REACHED" if "429" in error_msg else f"{_MAX_CONSECUTIVE_ERRORS} consecutive errors"
-                        print(f"[TICK ERROR] {reason} — simulation PAUSED. Check logs.")
-                        try:
-                            await broadcast_callback({"tick": -1, "agents": [], "asabiyyah": 0.0, "cpr": {}, "logs": [], "error": f"{reason}: {error_msg}"})
-                        except Exception:
-                            pass
+            try:
+                current_session_id.set(session_id)
+                await process_tick(broadcast_callback, session_id)
+                _consecutive_errors[session_id] = 0  # reset on success
+            except Exception as e:
+                err_count = _consecutive_errors.get(session_id, 0) + 1
+                _consecutive_errors[session_id] = err_count
+                import traceback
+                error_msg = str(e) + "\n" + traceback.format_exc()
+                print(f"[{session_id}] [TICK ERROR #{err_count}] {error_msg}")
+                
+                # Kill switch for LLM Rate Limits
+                if "429" in error_msg or "Rate limit" in error_msg or err_count >= _MAX_CONSECUTIVE_ERRORS:
+                    pause(session_id)
+                    reason = "RATE LIMIT REACHED" if "429" in error_msg else f"{_MAX_CONSECUTIVE_ERRORS} consecutive errors"
+                    print(f"[{session_id}] [TICK ERROR] {reason} — simulation PAUSED. Check logs.")
+                    try:
+                        await broadcast_callback({"tick": -1, "agents": [], "asabiyyah": 0.0, "cpr": {}, "logs": [], "error": f"{reason}: {error_msg}"})
+                    except Exception:
+                        pass
             await asyncio.sleep(float(os.getenv("TICK_DURATION_SECONDS", "1.0")))
     except asyncio.CancelledError:
-        print("Tick loop cancelled.")
+        print(f"[{session_id}] Tick loop cancelled.")
     except Exception as e:
-        print(f"Fatal error in tick loop: {e}")
+        print(f"[{session_id}] Fatal error in tick loop: {e}")
 
-async def process_tick(broadcast_callback, run_id: str):
+async def process_tick(broadcast_callback, session_id: str):
     with Session(engine) as session:
         # Get or create global state
-        state = session.exec(select(GlobalState).where(GlobalState.session_id == "default")).first()
+        state = session.exec(select(GlobalState).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get())).first()
         if not state:
-            state = GlobalState(session_id="default", current_tick=0)
+            state = GlobalState(session_id=session_id, current_tick=0)
             session.add(state)
         
         state.current_tick += 1
@@ -119,19 +129,19 @@ async def process_tick(broadcast_callback, run_id: str):
         session.add(state)
         
         # Get all agents
-        agents = session.exec(select(Agent)).all()
+        agents = session.exec(select(Agent).where(Agent.session_id == current_session_id.get())).all()
         
         logs = []
         
         # Process God Mode Queue
-        global god_mode_queue
-        if god_mode_queue:
-            pending_god_mode = god_mode_queue[:]
-            god_mode_queue.clear()
+        global god_mode_queues
+        if session_id in god_mode_queues and god_mode_queues[session_id]:
+            pending_god_mode = god_mode_queues[session_id][:]
+            god_mode_queues[session_id].clear()
             
             for gm in pending_god_mode:
                 if gm["type"] == "smite":
-                    agent = session.exec(select(Agent).where(Agent.agent_id == gm["agent_id"])).first()
+                    agent = session.exec(select(Agent).where(Agent.session_id == current_session_id.get()).where(Agent.agent_id == gm["agent_id"])).first()
                     if agent:
                         vitals = dict(agent.vitals) if agent.vitals else {}
                         vitals["health"] = 10.0
@@ -150,7 +160,7 @@ async def process_tick(broadcast_callback, run_id: str):
                         logs.append(AgentLogEntry(agent_id=agent.agent_id, action="SMITED", reasoning="The Gods have struck this agent down!"))
                         
                 elif gm["type"] == "bless":
-                    agent = session.exec(select(Agent).where(Agent.agent_id == gm["agent_id"])).first()
+                    agent = session.exec(select(Agent).where(Agent.session_id == current_session_id.get()).where(Agent.agent_id == gm["agent_id"])).first()
                     if agent:
                         vitals = dict(agent.vitals) if agent.vitals else {}
                         vitals["health"] = 100.0
@@ -197,6 +207,7 @@ async def process_tick(broadcast_callback, run_id: str):
                     logs.append(AgentLogEntry(agent_id="SYSTEM", action="PLAGUE", reasoning="A terrible Plague sweeps the land! All agents lose 50 health."))
                     from .lore import add_global_lore_event
                     add_global_lore_event(
+                        current_session_id.get(),
                         f"The Divine Plague descended upon all civilizations at Tick {state.current_tick}. "
                         f"Every living soul lost half their health. The cause remains unknown.",
                         state.current_tick
@@ -228,6 +239,7 @@ async def process_tick(broadcast_callback, run_id: str):
                     logs.append(AgentLogEntry(agent_id="SYSTEM", action="MIRACLE", reasoning="A Miracle! Abundant Food and Wood have appeared across the land."))
                     from .lore import add_global_lore_event
                     add_global_lore_event(
+                        current_session_id.get(),
                         f"At Tick {state.current_tick}, an inexplicable miracle occurred: massive quantities of Food "
                         f"and Wood appeared across the land with no natural cause. The agents who witnessed it "
                         f"were left to wonder about its origin.",
@@ -252,6 +264,7 @@ async def process_tick(broadcast_callback, run_id: str):
                     logs.append(AgentLogEntry(agent_id="SYSTEM", action="FAMINE", reasoning="A catastrophic Famine has struck! All environmental resources have withered."))
                     from .lore import add_global_lore_event
                     add_global_lore_event(
+                        current_session_id.get(),
                         f"A great Famine consumed all sustenance at Tick {state.current_tick}. "
                         f"Every food source and harvest was annihilated. Civilizations scramble to survive.",
                         state.current_tick
@@ -483,8 +496,8 @@ async def process_tick(broadcast_callback, run_id: str):
                 message = action.get("message", "")
                 if target_id and message:
                     from ..models.db import Cognition
-                    target_cog = session.exec(select(Cognition).where(Cognition.agent_id == target_id)).first()
-                    my_cog = session.exec(select(Cognition).where(Cognition.agent_id == agent.agent_id)).first()
+                    target_cog = session.exec(select(Cognition).where(Cognition.session_id == current_session_id.get()).where(Cognition.agent_id == target_id)).first()
+                    my_cog = session.exec(select(Cognition).where(Cognition.session_id == current_session_id.get()).where(Cognition.agent_id == agent.agent_id)).first()
                     if target_cog and my_cog:
                         wm = list(target_cog.working_memory) if target_cog.working_memory else []
                         wm.append(f"[Message from {agent.agent_id}]: {message}")
@@ -542,7 +555,7 @@ async def process_tick(broadcast_callback, run_id: str):
                     
                     # --- Role System Integration ---
                     from ..models.db import Cognition
-                    cog = session.exec(select(Cognition).where(Cognition.agent_id == agent.agent_id)).first()
+                    cog = session.exec(select(Cognition).where(Cognition.session_id == current_session_id.get()).where(Cognition.agent_id == agent.agent_id)).first()
                     
                     structure_upper = structure.upper()
                     if "TEMPLE" in structure_upper or "SHRINE" in structure_upper:
@@ -584,6 +597,7 @@ async def process_tick(broadcast_callback, run_id: str):
                     # Write to Akashic Records
                     from .lore import add_lore_event
                     add_lore_event(
+                        current_session_id.get(),
                         agent.civilization_id,
                         f"Agent {agent.agent_id} ({agent.social_status}) constructed a {structure} "
                         f"at ({cx}, {cy}) on Tick {state.current_tick}. A new landmark rises.",
@@ -594,7 +608,7 @@ async def process_tick(broadcast_callback, run_id: str):
                 
                 # Satisfy the drive by purging the Demiurgic Layer directive from belief_graph
                 from ..models.db import Cognition
-                cog = session.exec(select(Cognition).where(Cognition.agent_id == agent.agent_id)).first()
+                cog = session.exec(select(Cognition).where(Cognition.session_id == current_session_id.get()).where(Cognition.agent_id == agent.agent_id)).first()
                 if cog and cog.belief_graph:
                     graph = dict(cog.belief_graph)
                     pruned = False
@@ -681,7 +695,7 @@ async def process_tick(broadcast_callback, run_id: str):
                         
                         # ── Write combat outcome to AGGRESSOR's working memory ──────
                         from ..models.db import Cognition
-                        my_cog_atk = session.exec(select(Cognition).where(Cognition.agent_id == agent.agent_id)).first()
+                        my_cog_atk = session.exec(select(Cognition).where(Cognition.session_id == current_session_id.get()).where(Cognition.agent_id == agent.agent_id)).first()
                         if my_cog_atk:
                             atk_wm = list(my_cog_atk.working_memory) if my_cog_atk.working_memory else []
                             loot_summary = f"Food:{stolen_food} Wood:{stolen_wood} Water:{stolen_water}"
@@ -696,7 +710,7 @@ async def process_tick(broadcast_callback, run_id: str):
                             session.add(my_cog_atk)
                         
                         # ── Add Grudge Memory to victim ──────────────────────────────
-                        target_cog = session.exec(select(Cognition).where(Cognition.agent_id == target_id)).first()
+                        target_cog = session.exec(select(Cognition).where(Cognition.session_id == current_session_id.get()).where(Cognition.agent_id == target_id)).first()
                         if target_cog:
                             ep_mem = list(target_cog.episodic_memory) if target_cog.episodic_memory else []
                             ep_mem.append(f"[GRUDGE] Agent {agent.agent_id} attacked me on Tick {state.current_tick} for {dmg:.1f} damage and stole my resources.")
@@ -789,7 +803,7 @@ async def process_tick(broadcast_callback, run_id: str):
                             session.add(target_agent)
                             
                             from ..models.db import Cognition
-                            target_cog = session.exec(select(Cognition).where(Cognition.agent_id == target_id)).first()
+                            target_cog = session.exec(select(Cognition).where(Cognition.session_id == current_session_id.get()).where(Cognition.agent_id == target_id)).first()
                             if target_cog:
                                 wm = list(target_cog.working_memory) if target_cog.working_memory else []
                                 wm.append(f"[TRADE] {agent.agent_id} gave you {offer} in exchange for your {request}.")
@@ -841,7 +855,7 @@ async def process_tick(broadcast_callback, run_id: str):
                 belief_text = action.get("belief", "").strip()
                 if belief_text:
                     from ..models.db import Cognition
-                    cog = session.exec(select(Cognition).where(Cognition.agent_id == agent.agent_id)).first()
+                    cog = session.exec(select(Cognition).where(Cognition.session_id == current_session_id.get()).where(Cognition.agent_id == agent.agent_id)).first()
                     if cog:
                         graph = dict(cog.belief_graph) if cog.belief_graph else {"functional": [], "relational": [], "theological": []}
                         if "theological" not in graph:
@@ -869,8 +883,8 @@ async def process_tick(broadcast_callback, run_id: str):
                         import random
                         elder = random.choice(elders)
                         from ..models.db import Cognition
-                        elder_cog = session.exec(select(Cognition).where(Cognition.agent_id == elder.agent_id)).first()
-                        child_cog = session.exec(select(Cognition).where(Cognition.agent_id == agent.agent_id)).first()
+                        elder_cog = session.exec(select(Cognition).where(Cognition.session_id == current_session_id.get()).where(Cognition.agent_id == elder.agent_id)).first()
+                        child_cog = session.exec(select(Cognition).where(Cognition.session_id == current_session_id.get()).where(Cognition.agent_id == agent.agent_id)).first()
                         
                         if elder_cog and child_cog:
                             # Copy weighted subset of elder's belief_graph
@@ -910,7 +924,7 @@ async def process_tick(broadcast_callback, run_id: str):
                 # Low-weight beliefs erode over time; the world forgets the old.
                 # Fix: Priests have half the belief decay rate (sacred memory persists)
                 from ..models.db import Cognition
-                cog_decay = session.exec(select(Cognition).where(Cognition.agent_id == agent.agent_id)).first()
+                cog_decay = session.exec(select(Cognition).where(Cognition.session_id == current_session_id.get()).where(Cognition.agent_id == agent.agent_id)).first()
                 if cog_decay and cog_decay.belief_graph:
                     graph = dict(cog_decay.belief_graph)
                     changed = False
@@ -1123,6 +1137,7 @@ async def process_tick(broadcast_callback, run_id: str):
                 # ── Lore event in Akashic Records ────────────────────────────────
                 from .lore import add_lore_event
                 add_lore_event(
+                    current_session_id.get(),
                     agent_civ,
                     f"Agent {agent.agent_id} ({agent_role}) of {agent_civ} perished from {cause} "
                     f"on Tick {state.current_tick}. They lived for {agent.age} ticks across "
@@ -1141,7 +1156,7 @@ async def process_tick(broadcast_callback, run_id: str):
                     ox = other.coordinates.get("x", 0)
                     oy = other.coordinates.get("y", 0)
                     if abs(dead_x - ox) + abs(dead_y - oy) <= 10:
-                        wit_cog = session.exec(select(Cognition).where(Cognition.agent_id == other.agent_id)).first()
+                        wit_cog = session.exec(select(Cognition).where(Cognition.session_id == current_session_id.get()).where(Cognition.agent_id == other.agent_id)).first()
                         if wit_cog:
                             wit_wm = list(wit_cog.working_memory) if wit_cog.working_memory else []
                             wit_wm.append(
@@ -1159,7 +1174,7 @@ async def process_tick(broadcast_callback, run_id: str):
                 my_trust_scores = trust.get(agent.agent_id, {})
                 for peer_id, t_val in my_trust_scores.items():
                     if t_val > 0.8:
-                        peer = session.exec(select(Agent).where(Agent.agent_id == peer_id)).first()
+                        peer = session.exec(select(Agent).where(Agent.session_id == current_session_id.get()).where(Agent.agent_id == peer_id)).first()
                         if peer:
                             p_vitals = dict(peer.vitals)
                             p_vitals["stamina"] = max(0.0, p_vitals.get("stamina", 100.0) * 0.5)
@@ -1167,7 +1182,7 @@ async def process_tick(broadcast_callback, run_id: str):
                             from sqlalchemy.orm.attributes import flag_modified
                             flag_modified(peer, "vitals")
                             session.add(peer)
-                            peer_cog = session.exec(select(Cognition).where(Cognition.agent_id == peer_id)).first()
+                            peer_cog = session.exec(select(Cognition).where(Cognition.session_id == current_session_id.get()).where(Cognition.agent_id == peer_id)).first()
                             if peer_cog:
                                 ep_mem = list(peer_cog.episodic_memory) if peer_cog.episodic_memory else []
                                 ep_mem.append(f"[GRIEF] My trusted ally {agent.agent_id} died of {cause} on Tick {state.current_tick}. I am devastated.")
@@ -1176,7 +1191,7 @@ async def process_tick(broadcast_callback, run_id: str):
                                 flag_modified(peer_cog, "episodic_memory")
                                 session.add(peer_cog)
 
-                cog = session.exec(select(Cognition).where(Cognition.agent_id == agent.agent_id)).first()
+                cog = session.exec(select(Cognition).where(Cognition.session_id == current_session_id.get()).where(Cognition.agent_id == agent.agent_id)).first()
                 if cog:
                     session.delete(cog)
                 
@@ -1244,7 +1259,7 @@ async def process_tick(broadcast_callback, run_id: str):
                         
                         if random.random() < reproduction_chance:
                             new_id = f"A_{random.randint(100, 999)}"
-                            if not session.exec(select(Agent).where(Agent.agent_id == new_id)).first():
+                            if not session.exec(select(Agent).where(Agent.session_id == current_session_id.get()).where(Agent.agent_id == new_id)).first():
                                 from ..models.db import Cognition
                                 
                                 # Mutate personality slightly from parent's traits
@@ -1256,6 +1271,7 @@ async def process_tick(broadcast_callback, run_id: str):
                                 
                                 new_agent = Agent(
                                     agent_id=new_id,
+                                    session_id=current_session_id.get(),
                                     civilization_id=agent.civilization_id,
                                     generation=agent.generation + 1,
                                     status="Apprenticeship",
@@ -1277,6 +1293,7 @@ async def process_tick(broadcast_callback, run_id: str):
                                 
                                 logs.append(AgentLogEntry(
                                     agent_id=new_id,
+                                    session_id=current_session_id.get(),
                                     action="BORN",
                                     reasoning=f"A new generation begins in {agent.civilization_id}!"
                                 ))
@@ -1318,7 +1335,7 @@ async def process_tick(broadcast_callback, run_id: str):
                 fat_agents = []
                 for agent in agents:
                     from ..models.db import Cognition
-                    cog = session.exec(select(Cognition).where(Cognition.agent_id == agent.agent_id)).first()
+                    cog = session.exec(select(Cognition).where(Cognition.session_id == current_session_id.get()).where(Cognition.agent_id == agent.agent_id)).first()
                     
                     emo = "Calm/Boredom"
                     for ad in agents_data:
@@ -1353,16 +1370,10 @@ async def process_tick(broadcast_callback, run_id: str):
                     "agents": fat_agents,
                     "logs": [log.model_dump() for log in logs]
                 }
-                await analytics.log_tick(run_id, fat_payload)
+                await analytics.log_tick(session_id, fat_payload)
         except Exception as e:
             print(f"Analytics logging failed: {e}")
             
         await broadcast_callback(payload_dict)
 
-def start():
-    global is_running
-    is_running = True
 
-def pause():
-    global is_running
-    is_running = False

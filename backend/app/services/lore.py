@@ -22,12 +22,13 @@ _recent_writes: deque = deque(maxlen=50)
 _DEDUP_WINDOW = 5  # ticks — if same event for same civ within this window, skip
 
 
-def _fingerprint(civ_id: str, event_text: str) -> str:
+def _fingerprint(session_id: str, civ_id: str, event_text: str) -> str:
     """Short fingerprint to detect near-identical events."""
-    return f"{civ_id}::{event_text[:80].strip().lower()}"
+    return f"{session_id}::{civ_id}::{event_text[:80].strip().lower()}"
 
 
 def add_lore_event(
+    session_id: str,
     civ_id: str,
     event_text: str,
     current_tick: int,
@@ -38,7 +39,7 @@ def add_lore_event(
     Adds a historical event to the Akashic Records (ChromaDB vector store).
     Returns the doc_id, or None if the event was deduplicated.
     """
-    fp = _fingerprint(civ_id, event_text)
+    fp = _fingerprint(session_id, civ_id, event_text)
     if fp in _recent_writes:
         return None  # Deduplicated — same event already written recently
 
@@ -48,6 +49,7 @@ def add_lore_event(
     collection.add(
         documents=[event_text],
         metadatas=[{
+            "session_id": session_id,
             "civ_id": civ_id,
             "tick": current_tick,
             "agent_id": agent_id,
@@ -58,6 +60,7 @@ def add_lore_event(
 
 
 def add_global_lore_event(
+    session_id: str,
     event_text: str,
     current_tick: int,
     agent_id: str = "DEMIURGE",
@@ -66,10 +69,11 @@ def add_global_lore_event(
     Records a world-level event visible to ALL civilizations.
     Writes one entry with civ_id='GLOBAL'.
     """
-    add_lore_event("GLOBAL", event_text, current_tick, agent_id)
+    add_lore_event(session_id, "GLOBAL", event_text, current_tick, agent_id)
 
 
 def query_lore(
+    session_id: str,
     civ_id: str,
     query_text: str,
     n_results: int = 3,
@@ -92,7 +96,7 @@ def query_lore(
             results = collection.query(
                 query_texts=[query_text],
                 n_results=safe_n,
-                where={"civ_id": target_civ},
+                where={"$and": [{"civ_id": target_civ}, {"session_id": session_id}]},
             )
             if results and results.get("documents") and len(results["documents"]) > 0:
                 docs = results["documents"][0]
@@ -116,7 +120,7 @@ def query_lore(
     return all_results[:n_results]
 
 
-def get_akashic_records(civ_id: str, limit: int = 20) -> List[Dict[str, Any]]:
+def get_akashic_records(session_id: str, civ_id: str, limit: int = 20) -> List[Dict[str, Any]]:
     """
     Returns the most recent lore events for a civilization (for the UI panel).
     Unlike query_lore, this fetches chronologically rather than by similarity.
@@ -127,7 +131,7 @@ def get_akashic_records(civ_id: str, limit: int = 20) -> List[Dict[str, Any]]:
             return []
         safe_n = min(limit, count)
         results = collection.get(
-            where={"civ_id": {"$in": [civ_id, "GLOBAL"]}},
+            where={"$and": [{"civ_id": {"$in": [civ_id, "GLOBAL"]}}, {"session_id": session_id}]},
             limit=safe_n,
         )
         if not results or not results.get("documents"):

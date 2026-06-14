@@ -1,5 +1,5 @@
 from sqlmodel import Session, select
-from ..models.db import GlobalState
+from ..models.db import current_session_id, GlobalState
 from sqlalchemy.orm.attributes import flag_modified
 
 TECH_TREE_COSTS = {
@@ -16,7 +16,7 @@ def unlock_tech(session: Session, civ_id: str, tech_id: str) -> bool:
     if tech_id not in TECH_TREE_COSTS:
         return False
         
-    state = session.exec(select(GlobalState).where(GlobalState.session_id == "default")).first()
+    state = session.exec(select(GlobalState).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get())).first()
     if not state:
         return False
         
@@ -34,18 +34,18 @@ def unlock_tech(session: Session, civ_id: str, tech_id: str) -> bool:
     return False
 
 def get_unlocked_techs(session: Session, civ_id: str) -> list:
-    state = session.exec(select(GlobalState).where(GlobalState.session_id == "default")).first()
+    state = session.exec(select(GlobalState).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get())).first()
     if not state or not state.tech_tree:
         return []
     return state.tech_tree.get(civ_id, [])
 
 def evaluate_tech_unlocks(session: Session):
-    state = session.exec(select(GlobalState).where(GlobalState.session_id == "default")).first()
+    state = session.exec(select(GlobalState).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get())).first()
     if not state:
         return
 
     from ..models.db import Agent
-    agents = session.exec(select(Agent)).all()
+    agents = session.exec(select(Agent).where(Agent.session_id == current_session_id.get())).all()
     
     # We will sum up resources per civ
     civ_resources = {}
@@ -61,7 +61,7 @@ def evaluate_tech_unlocks(session: Session):
         
         # Devotion proxy: number of theological beliefs across the civ
         from ..models.db import Cognition
-        cog = session.exec(select(Cognition).where(Cognition.agent_id == agent.agent_id)).first()
+        cog = session.exec(select(Cognition).where(Cognition.session_id == current_session_id.get()).where(Cognition.session_id == current_session_id.get()).where(Cognition.agent_id == agent.agent_id)).first()
         if cog and cog.belief_graph:
             theological = cog.belief_graph.get("theological", [])
             civ_resources[civ]["devotion"] += len(theological) * 10

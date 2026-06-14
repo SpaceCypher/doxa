@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: doxa-backend
+    env: docker
+    rootDir: backend
+    plan: starter
+    disk:
+      name: doxa-data
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: FRONTEND_URL
+        sync: false

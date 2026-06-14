@@ -2,21 +2,21 @@ import math
 import random
 from typing import List
 from sqlmodel import Session, select
-from ..models.db import engine, Agent, GlobalState, Cognition
+from ..models.db import current_session_id, engine, Agent, GlobalState, Cognition
 
 def detect_norm_emergence(session: Session):
     """
     Scans the population to find beliefs that cross the 25% tipping point.
     Adds them to GlobalState.active_norms.
     """
-    state = session.exec(select(GlobalState).where(GlobalState.session_id == "default")).first()
+    state = session.exec(select(GlobalState).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get())).first()
     if not state: return
     
-    agents = session.exec(select(Agent)).all()
+    agents = session.exec(select(Agent).where(Agent.session_id == current_session_id.get())).all()
     if not agents: return
     total_agents = len(agents)
     
-    cognitions = session.exec(select(Cognition)).all()
+    cognitions = session.exec(select(Cognition).where(Cognition.session_id == current_session_id.get()).where(Cognition.session_id == current_session_id.get())).all()
     belief_counts = {}
     
     for cog in cognitions:
@@ -48,8 +48,8 @@ def process_memetics(session: Session):
     """
     detect_norm_emergence(session)
     
-    state = session.exec(select(GlobalState).where(GlobalState.session_id == "default")).first()
-    agents = session.exec(select(Agent)).all()
+    state = session.exec(select(GlobalState).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get())).first()
+    agents = session.exec(select(Agent).where(Agent.session_id == current_session_id.get())).all()
     
     trust_graph = dict(state.trust_graph) if state and state.trust_graph else {}
     active_norms = list(state.active_norms) if state and state.active_norms else []
@@ -94,7 +94,7 @@ def process_memetics(session: Session):
             # Pre-fetch cognitions for all trusted peers
             trusted_peer_ids = list(my_trusts.keys())
             if trusted_peer_ids:
-                cognitions = session.exec(select(Cognition).where(Cognition.agent_id.in_(trusted_peer_ids))).all()
+                cognitions = session.exec(select(Cognition).where(Cognition.session_id == current_session_id.get()).where(Cognition.session_id == current_session_id.get()).where(Cognition.agent_id.in_(trusted_peer_ids))).all()
                 peer_beliefs = {c.agent_id: dict(c.belief_graph) if c.belief_graph else {} for c in cognitions}
             else:
                 peer_beliefs = {}
@@ -113,7 +113,7 @@ def process_memetics(session: Session):
                             sum_trust += t_val
                 
                 if sum_trust >= theta_i:
-                    cog = session.exec(select(Cognition).where(Cognition.agent_id == agent.agent_id)).first()
+                    cog = session.exec(select(Cognition).where(Cognition.session_id == current_session_id.get()).where(Cognition.session_id == current_session_id.get()).where(Cognition.agent_id == agent.agent_id)).first()
                     if cog:
                         cgraph = dict(cog.belief_graph) if cog.belief_graph else {"functional": [], "relational": [], "theological": []}
                         already = any(n.get("node") == norm for n in cgraph.get("functional", []))

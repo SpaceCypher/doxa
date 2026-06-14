@@ -3,7 +3,7 @@ import asyncio
 import random
 from sqlmodel import Session, select
 from typing import Dict, List
-from ..models.db import engine, GlobalState, Agent, Cognition
+from ..models.db import current_session_id, engine, GlobalState, Agent, Cognition
 from .llm import batch_infer_actions
 
 COMPILER_PROMPT = """
@@ -55,14 +55,14 @@ async def compile_belief_to_law(belief_text: str) -> Dict:
 # LOOP 1 — Collective Belief → Physics Law
 # ─────────────────────────────────────────────────────────────────────────────
 async def detect_belief_laws(session: Session):
-    state = session.exec(select(GlobalState).where(GlobalState.session_id == "default")).first()
+    state = session.exec(select(GlobalState).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get())).first()
     if not state: return
 
-    agents = session.exec(select(Agent)).all()
+    agents = session.exec(select(Agent).where(Agent.session_id == current_session_id.get())).all()
     total_agents = len(agents)
     if total_agents == 0: return
     
-    cognitions = session.exec(select(Cognition)).all()
+    cognitions = session.exec(select(Cognition).where(Cognition.session_id == current_session_id.get()).where(Cognition.session_id == current_session_id.get())).all()
     
     belief_stats = {} # belief -> {"count": int, "sum_weight": float}
     
@@ -116,7 +116,7 @@ def detect_death_clusters(session: Session):
     - Combat cluster     → create Battlefield scar (terrain type 6), spawn Gold
     - Starvation cluster → boost global food respawn for 20 ticks
     """
-    state = session.exec(select(GlobalState).where(GlobalState.session_id == "default")).first()
+    state = session.exec(select(GlobalState).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get())).first()
     if not state: return
 
     death_markers = list(state.death_markers) if state.death_markers else []
@@ -242,7 +242,7 @@ def detect_settlements(session: Session):
     declare a Settlement zone. Settlement zones give +5 health regen and +20%
     crop maturity speed to agents inside them.
     """
-    state = session.exec(select(GlobalState).where(GlobalState.session_id == "default")).first()
+    state = session.exec(select(GlobalState).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get())).first()
     if not state: return
 
     cpr = dict(state.common_pool_resources) if state.common_pool_resources else {}
@@ -311,7 +311,7 @@ def detect_dominant_action(session: Session):
     - COMMUNICATE maj. → Asabiyyah gains 10% faster (golden age of dialogue)
     - BUILD majority   → structure durability +10 (architectural age)
     """
-    state = session.exec(select(GlobalState).where(GlobalState.session_id == "default")).first()
+    state = session.exec(select(GlobalState).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get())).first()
     if not state: return
 
     physics_constants = dict(state.physics_constants) if state.physics_constants else {}
@@ -422,7 +422,7 @@ async def run_pattern_detector(session: Session):
     Main entry point for the Autonomous Growth loops.
     Called periodically (every 50 ticks for Loops 1+2+3, every 100 ticks for Loop 4).
     """
-    state = session.exec(select(GlobalState).where(GlobalState.session_id == "default")).first()
+    state = session.exec(select(GlobalState).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get())).first()
     if not state:
         return
 

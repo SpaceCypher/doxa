@@ -10,7 +10,7 @@ interface AgentPanelProps {
 }
 
 export const AgentPanel: React.FC<AgentPanelProps> = ({ agent, cognition, history = [] }) => {
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const ulRef = useRef<HTMLUListElement>(null);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     workingMemory: true,
     psychologicalState: false,
@@ -18,8 +18,8 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({ agent, cognition, histor
   });
 
   useEffect(() => {
-    if (scrollRef.current && openSections.workingMemory) {
-      scrollRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (ulRef.current && openSections.workingMemory) {
+      ulRef.current.scrollTo({ top: ulRef.current.scrollHeight, behavior: 'smooth' });
     }
   }, [cognition?.working_memory, openSections.workingMemory]);
 
@@ -68,7 +68,7 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({ agent, cognition, histor
       </div>
 
       {/* WORKING MEMORY */}
-      <div className={`bg-[#111110] border border-[#3B3A35] flex flex-col ${openSections.workingMemory ? 'flex-grow min-h-0' : 'flex-shrink-0'}`}>
+      <div className="bg-[#111110] border border-[#3B3A35] flex flex-col flex-shrink-0">
         <div 
           className="p-3 border-b border-[#3B3A35] flex items-center justify-between text-[#A8A08F] font-bold uppercase tracking-widest text-xs flex-shrink-0 cursor-pointer hover:bg-[#1A1A18]"
           onClick={() => toggleSection('workingMemory')}
@@ -80,7 +80,7 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({ agent, cognition, histor
         </div>
         {openSections.workingMemory && (
           <>
-            <ul className="flex-grow overflow-y-auto custom-scrollbar p-3 space-y-3">
+            <ul ref={ulRef} className="p-3 space-y-3 max-h-48 overflow-y-auto custom-scrollbar">
               {cognition && cognition.working_memory && cognition.working_memory.length > 0 ? (
                 cognition.working_memory.map((mem: any, i: number) => {
                    const text = typeof mem === 'string' ? mem : JSON.stringify(mem);
@@ -110,7 +110,6 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({ agent, cognition, histor
               ) : (
                 <li className="text-[#A8A08F] font-bold italic opacity-60 text-xs text-center py-4">No recent activity</li>
               )}
-              <div ref={scrollRef} />
             </ul>
             <div className="p-2 border-t border-[#3B3A35] flex-shrink-0">
                <Link href="/logs" className="block w-full text-center py-2 text-[10px] font-bold uppercase tracking-widest text-[#E7E1D5] hover:bg-[#1A1A18] transition-colors">

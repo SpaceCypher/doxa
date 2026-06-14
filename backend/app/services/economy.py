@@ -10,7 +10,7 @@ import uuid
 import math
 import random
 from sqlmodel import Session, select
-from ..models.db import engine, Agent, GlobalState, Cognition
+from ..models.db import current_session_id, engine, Agent, GlobalState, Cognition
 from sqlalchemy.orm.attributes import flag_modified
 
 
@@ -83,11 +83,11 @@ def claim_territory(session: Session, agent_id: str, x: int, y: int):
     Called when an agent performs a BUILD action.
     Claims the 10×10 zone for that agent's civilization.
     """
-    state = session.exec(select(GlobalState).where(GlobalState.session_id == "default")).first()
+    state = session.exec(select(GlobalState).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get())).first()
     if not state:
         return
 
-    agent = session.exec(select(Agent).where(Agent.agent_id == agent_id)).first()
+    agent = session.exec(select(Agent).where(Agent.session_id == current_session_id.get()).where(Agent.agent_id == agent_id)).first()
     if not agent:
         return
 
@@ -111,7 +111,7 @@ def apply_territory_pressure(session: Session, live_agents):
     Agents in enemy territory during wartime take passive health drain.
     Agents in their own territory get a small health regen bonus.
     """
-    state = session.exec(select(GlobalState).where(GlobalState.session_id == "default")).first()
+    state = session.exec(select(GlobalState).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get())).first()
     if not state:
         return
 
@@ -157,12 +157,12 @@ def process_war(session: Session):
     formally declare war in GlobalState.war_state.
     Peace is restored when trust recovers above PEACE_TRUST_THRESHOLD.
     """
-    state = session.exec(select(GlobalState).where(GlobalState.session_id == "default")).first()
+    state = session.exec(select(GlobalState).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get())).first()
     if not state or not state.trust_graph:
         return
 
     trust = dict(state.trust_graph)
-    agents = session.exec(select(Agent)).all()
+    agents = session.exec(select(Agent).where(Agent.session_id == current_session_id.get())).all()
     war_state = dict(state.war_state) if state.war_state else {}
 
     # Build set of live agent ids to filter ghost trust entries
@@ -212,8 +212,9 @@ def process_war(session: Session):
                 changed = True
                 print(f"[WAR] ⚔️  {civ_a} has declared war on {civ_b}! Avg trust: {avg_trust:.3f}")
                 from .lore import add_lore_event
-                add_lore_event(civ_a, f"Our civilization formally declared war on the heretics of {civ_b}.", state.current_tick)
-                add_lore_event(civ_b, f"The infidels of {civ_a} have declared an unjust war against us.", state.current_tick)
+                pass
+                add_lore_event(current_session_id.get(), civ_a, f"Our civilization formally declared war on the heretics of {civ_b}.", state.current_tick)
+                add_lore_event(current_session_id.get(), civ_b, f"The infidels of {civ_a} have declared an unjust war against us.", state.current_tick)
 
             elif currently_at_war and avg_trust > PEACE_TRUST_THRESHOLD:
                 # Peace restored
@@ -224,8 +225,9 @@ def process_war(session: Session):
                 changed = True
                 print(f"[PEACE] 🕊️  {civ_a} and {civ_b} have made peace. Avg trust: {avg_trust:.3f}")
                 from .lore import add_lore_event
-                add_lore_event(civ_a, f"A peace treaty was signed with {civ_b}.", state.current_tick)
-                add_lore_event(civ_b, f"A peace treaty was signed with {civ_a}.", state.current_tick)
+                pass
+                add_lore_event(current_session_id.get(), civ_a, f"A peace treaty was signed with {civ_b}.", state.current_tick)
+                add_lore_event(current_session_id.get(), civ_b, f"A peace treaty was signed with {civ_a}.", state.current_tick)
 
     if changed:
         state.war_state = war_state

@@ -3,7 +3,7 @@ import random
 from typing import List, Dict, Any
 from .llm import batch_infer_actions
 from sqlmodel import Session, select
-from ..models.db import Cognition
+from ..models.db import current_session_id, Cognition
 from .memory import retrieve_topological_memory
 from .lore import query_lore
 
@@ -100,7 +100,7 @@ Rules:
   - {{"type": "GATHER", "resource": "wood|water|food|stone|gold"}} (Gathers 10 of the resource from your surroundings into your inventory. Gold is rare and precious — used for high-value trades. Do this in Forests for double wood!)
   - {{"type": "TRADE", "target": "agent_id", "offer": {{"wood": 5}}, "request": {{"food": 5}}}} (Atomically swap resources. Builds trust. Gold is accepted. Must be within distance 5.)
   - {{"type": "COMMUNICATE", "target": "agent_id", "message": "string"}} (Coordinate with nearby agents, spread beliefs, or gossip. Priests gain extra trust per message.)
-  - {{"type": "BUILD", "structure": "string"}} (Costs 20 stamina. Choose a structure that permanently changes your role: "Temple" → Priest (beliefs spread stronger, decay slower), "Barracks" → Soldier (+50% damage dealt, -50% damage taken), "Granary" → Farmer (+50 food on build, claims fertile territory). Claims a territory zone.)
+  - {{"type": "BUILD", "structure": "string"}} (Costs 20 stamina. MUST BE ON SOLID GROUND (Grass, Sand, Forest). Choose a structure that permanently changes your role: "Temple" → Priest (beliefs spread stronger, decay slower), "Barracks" → Soldier (+50% damage dealt, -50% damage taken), "Granary" → Farmer (+50 food on build, claims fertile territory). Claims a territory zone.)
   - {{"type": "ATTACK", "target": "agent_id"}} (Deals 15 base damage. Soldiers deal 1.5× damage. Pillages 20% of target's inventory on hit.)
   - {{"type": "INVENT_BELIEF", "belief": "string"}} (Costs 10 stamina. Invent a Sacred Value or ideology — Priests' invented beliefs start at higher weight.)
   - {{"type": "IDLE"}}
@@ -177,7 +177,7 @@ async def run_cognitive_loop(agents_data: List[Dict[str, Any]], session: Session
         return []
         
     from ..models.db import GlobalState
-    state = session.exec(select(GlobalState).where(GlobalState.session_id == "default")).first()
+    state = session.exec(select(GlobalState).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get())).first()
     active_laws = list(state.laws) if state and state.laws else []
     
     
@@ -188,7 +188,7 @@ async def run_cognitive_loop(agents_data: List[Dict[str, Any]], session: Session
     prompts = []
     for a in operation_agents:
         # Retrieve graph
-        cog = session.exec(select(Cognition).where(Cognition.agent_id == a['agent_id'])).first()
+        cog = session.exec(select(Cognition).where(Cognition.session_id == current_session_id.get()).where(Cognition.session_id == current_session_id.get()).where(Cognition.agent_id == a['agent_id'])).first()
         graph = dict(cog.belief_graph) if cog and cog.belief_graph else {}
         a['belief_graph'] = graph
         a['episodic_memory'] = list(cog.episodic_memory) if cog and cog.episodic_memory else []
@@ -209,7 +209,7 @@ async def run_cognitive_loop(agents_data: List[Dict[str, Any]], session: Session
         mems = retrieve_topological_memory(graph, obs, current_tick=a.get('current_tick', 0), top_k=5)
         
         # Query Akashic Records (Lore)
-        lore_results = query_lore(civ_id=a.get('civilization_id', 'civ_a'), query_text=obs, n_results=3)
+        lore_results = query_lore(session_id=current_session_id.get(), civ_id=a.get('civilization_id', 'civ_a'), query_text=obs, n_results=3)
         
         prompts.append({"text": build_prompt(a, mems, lore_results, active_laws)})
     
@@ -231,7 +231,7 @@ async def run_cognitive_loop(agents_data: List[Dict[str, Any]], session: Session
 
 def update_cognition_state(session: Session, agent_id: str, action: Dict[str, Any]) -> None:
     """Updates the agent's working memory with the episodic log and rich monologue."""
-    cognition = session.exec(select(Cognition).where(Cognition.agent_id == agent_id)).first()
+    cognition = session.exec(select(Cognition).where(Cognition.session_id == current_session_id.get()).where(Cognition.session_id == current_session_id.get()).where(Cognition.agent_id == agent_id)).first()
     if not cognition:
         return
         

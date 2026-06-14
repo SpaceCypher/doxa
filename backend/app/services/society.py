@@ -1,21 +1,21 @@
 from typing import Dict, Any, List
 import math
 from sqlmodel import Session, select
-from ..models.db import engine, GlobalState, Cognition, Agent
+from ..models.db import current_session_id, engine, GlobalState, Cognition, Agent
 
 def calculate_asabiyyah_per_civ(session: Session) -> dict:
     """Calculates the Khaldunian Asabiyyah (Social Cohesion) index per civilization."""
-    agents = session.exec(select(Agent)).all()
+    agents = session.exec(select(Agent).where(Agent.session_id == current_session_id.get())).all()
     civs = set(a.civilization_id for a in agents)
     
-    state = session.exec(select(GlobalState).where(GlobalState.session_id == "default")).first()
+    state = session.exec(select(GlobalState).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get())).first()
     physics_constants = dict(state.physics_constants) if state and state.physics_constants else {}
     gain_multiplier = physics_constants.get("asabiyyah_gain_multiplier", 1.0)
     
     asabiyyah_dict = {}
     for civ in civs:
         civ_agents = [a.agent_id for a in agents if a.civilization_id == civ]
-        cognitions = session.exec(select(Cognition).where(Cognition.agent_id.in_(civ_agents))).all()
+        cognitions = session.exec(select(Cognition).where(Cognition.session_id == current_session_id.get()).where(Cognition.session_id == current_session_id.get()).where(Cognition.agent_id.in_(civ_agents))).all()
         if not cognitions or len(cognitions) < 2:
             asabiyyah_dict[civ] = 1.0 
             continue
@@ -30,7 +30,7 @@ def calculate_asabiyyah_per_civ(session: Session) -> dict:
 
 def decay_cpr(session: Session) -> dict:
     """Decays Ostrom's Common Pool Resources based on consumption."""
-    state = session.exec(select(GlobalState).where(GlobalState.session_id == "default")).first()
+    state = session.exec(select(GlobalState).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get())).first()
     if not state:
         return {}
     
@@ -41,7 +41,7 @@ def decay_cpr(session: Session) -> dict:
     cpr["wood"] = min(1000, cpr.get("wood", 500) + 1)
     cpr["water"] = min(2000, cpr.get("water", 1000) + 5)
     
-    agent_count = len(session.exec(select(Agent)).all())
+    agent_count = len(session.exec(select(Agent).where(Agent.session_id == current_session_id.get())).all())
     cpr["water"] = max(0, cpr["water"] - (agent_count * 0.5))
     
     state.common_pool_resources = cpr
@@ -52,7 +52,7 @@ def decay_cpr(session: Session) -> dict:
 
 def update_trust_graph(session: Session, agent_a: str, agent_b: str, delta: float):
     """Updates the directed trust from agent_a to agent_b: T(t+1) = alpha * T(t) + (1-alpha) * delta"""
-    state = session.exec(select(GlobalState).where(GlobalState.session_id == "default")).first()
+    state = session.exec(select(GlobalState).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get())).first()
     if not state: return
     
     trust = dict(state.trust_graph) if state.trust_graph else {}
@@ -72,7 +72,7 @@ def update_trust_graph(session: Session, agent_a: str, agent_b: str, delta: floa
 def decay_trust_graph(session: Session):
     """Applies exponential time-decay to all trust edges: T(t+1) = T(t) * e^(-lambda)"""
     import math
-    state = session.exec(select(GlobalState).where(GlobalState.session_id == "default")).first()
+    state = session.exec(select(GlobalState).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get())).first()
     if not state or not state.trust_graph: return
     
     lam = 0.01 # Decay rate
@@ -93,7 +93,7 @@ def apply_triadic_closure(session: Session, tau: float = 0.6):
     """
     If agent A trusts B (T>tau) and A trusts C (T>tau), increase trust between B and C.
     """
-    state = session.exec(select(GlobalState).where(GlobalState.session_id == "default")).first()
+    state = session.exec(select(GlobalState).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get())).first()
     if not state or not state.trust_graph: return
     
     trust = dict(state.trust_graph)
@@ -125,12 +125,12 @@ def calculate_reputation(session: Session):
     Approximates Eigenvector Centrality from the Trust Graph.
     R_i = sum(T_ji * R_j)
     """
-    state = session.exec(select(GlobalState).where(GlobalState.session_id == "default")).first()
+    state = session.exec(select(GlobalState).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get())).first()
     if not state or not state.trust_graph:
         return
         
     trust = dict(state.trust_graph)
-    agents = session.exec(select(Agent)).all()
+    agents = session.exec(select(Agent).where(Agent.session_id == current_session_id.get())).all()
     agent_ids = [a.agent_id for a in agents]
     
     # Initialize uniform reputation
@@ -159,12 +159,12 @@ def trigger_raft_election(session: Session, cataclysm_name: str, civ_id: str):
     """
     Election logic. The agent with highest reputation dictates the God Node.
     """
-    state = session.exec(select(GlobalState).where(GlobalState.session_id == "default")).first()
+    state = session.exec(select(GlobalState).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get())).first()
     if not state or not state.reputation:
         return
         
     rep = dict(state.reputation)
-    agents = session.exec(select(Agent).where(Agent.civilization_id == civ_id)).all()
+    agents = session.exec(select(Agent).where(Agent.session_id == current_session_id.get()).where(Agent.civilization_id == civ_id)).all()
     civ_agent_ids = [a.agent_id for a in agents]
     
     civ_rep = {k: v for k, v in rep.items() if k in civ_agent_ids}
@@ -174,7 +174,7 @@ def trigger_raft_election(session: Session, cataclysm_name: str, civ_id: str):
     leader_id = max(civ_rep, key=civ_rep.get)
     
     # Get leader's theological nodes
-    leader_cog = session.exec(select(Cognition).where(Cognition.agent_id == leader_id)).first()
+    leader_cog = session.exec(select(Cognition).where(Cognition.session_id == current_session_id.get()).where(Cognition.session_id == current_session_id.get()).where(Cognition.agent_id == leader_id)).first()
     if not leader_cog: return
     
     graph = dict(leader_cog.belief_graph) if leader_cog.belief_graph else {}
@@ -185,7 +185,7 @@ def trigger_raft_election(session: Session, cataclysm_name: str, civ_id: str):
     leader_god_node = theological[0]
     
     # Propagate to everyone in civ
-    cognitions = session.exec(select(Cognition).where(Cognition.agent_id.in_(civ_agent_ids))).all()
+    cognitions = session.exec(select(Cognition).where(Cognition.session_id == current_session_id.get()).where(Cognition.session_id == current_session_id.get()).where(Cognition.agent_id.in_(civ_agent_ids))).all()
     for cog in cognitions:
         cgraph = dict(cog.belief_graph) if cog.belief_graph else {"functional": [], "relational": [], "theological": []}
         cgraph["theological"] = [leader_god_node]  # Overwrite
@@ -199,7 +199,7 @@ def detect_guild_formation(session: Session):
     Detects dense trust clusters. If 5+ agents form a complete clique in the trust graph,
     and share >= 3 functional beliefs, they form a Guild.
     """
-    state = session.exec(select(GlobalState).where(GlobalState.session_id == "default")).first()
+    state = session.exec(select(GlobalState).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get())).first()
     if not state or not state.trust_graph:
         return
     
@@ -224,7 +224,7 @@ def detect_guild_formation(session: Session):
                     break
                     
             if is_clique and len(coalition) >= 5:
-                cognitions = session.exec(select(Cognition).where(Cognition.agent_id.in_(list(coalition)))).all()
+                cognitions = session.exec(select(Cognition).where(Cognition.session_id == current_session_id.get()).where(Cognition.session_id == current_session_id.get()).where(Cognition.agent_id.in_(list(coalition)))).all()
                 if len(cognitions) == len(coalition):
                     shared_beliefs = None
                     for cog in cognitions:
@@ -255,7 +255,7 @@ def trigger_scapegoat(session: Session, civ_id: str):
     """
     Purges the agent with the highest mimetic_desire to reset Asabiyyah.
     """
-    agents = session.exec(select(Agent).where(Agent.civilization_id == civ_id)).all()
+    agents = session.exec(select(Agent).where(Agent.session_id == current_session_id.get()).where(Agent.civilization_id == civ_id)).all()
     if not agents: return
     
     # Bug 5 Fix: only consider live agents to avoid double-delete on already-dead agents
@@ -272,7 +272,7 @@ def trigger_scapegoat(session: Session, civ_id: str):
     session.add(scapegoat)
     
     # Reset Asabiyyah for the civ
-    state = session.exec(select(GlobalState).where(GlobalState.session_id == "default")).first()
+    state = session.exec(select(GlobalState).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get())).first()
     if state and state.asabiyyah_index:
         idx = dict(state.asabiyyah_index)
         idx[civ_id] = 1.0

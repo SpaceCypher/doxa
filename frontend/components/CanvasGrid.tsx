@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import { useTelemetry } from '../stores/useTelemetry';
+import { getSessionId } from '../utils/session';
+import { BACKEND_URL } from '../utils/api';
 
 // Civilization color palette
 const CIV_COLORS: Record<string, string> = {
@@ -658,9 +660,9 @@ export default function CanvasGrid() {
   const executeGodMode = async (action: 'smite' | 'bless' | 'spawn_food' | 'spawn_water') => {
     if (!contextMenu) return;
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+      const sessionId = getSessionId();
       if (action === 'smite' || action === 'bless') {
-        await fetch(`${baseUrl}/api/agent/${contextMenu.agent.id}/${action}`, { method: 'POST' });
+        await fetch(`${BACKEND_URL}/api/agent/${contextMenu.agent.id}/${action}?session_id=${sessionId}`, { method: 'POST' });
         showToast(`Agent ${action === 'smite' ? 'Smited' : 'Blessed'}!`, action === 'smite' ? 'text-red-400' : 'text-green-400', contextMenu.x, contextMenu.y);
 
         // Optimistic Log
@@ -674,10 +676,15 @@ export default function CanvasGrid() {
         }));
       } else if (action === 'spawn_food' || action === 'spawn_water') {
         const type = action === 'spawn_food' ? 'food' : 'water';
-        await fetch(`${baseUrl}/api/resource/spawn`, {
+        await fetch(`${BACKEND_URL}/api/resource/spawn`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ x: contextMenu.mapX, y: contextMenu.mapY, type })
+          body: JSON.stringify({ 
+            session_id: sessionId,
+            x: contextMenu.mapX, 
+            y: contextMenu.mapY, 
+            type 
+          })
         });
         showToast(`Spawned ${type} node`, 'text-blue-400', contextMenu.x, contextMenu.y);
 

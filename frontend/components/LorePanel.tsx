@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { getSessionId } from '../utils/session';
+import { BACKEND_URL } from '../utils/api';
 
 interface LoreEvent {
   text: string;
@@ -20,7 +22,8 @@ export default function LorePanel({ civId }: LorePanelProps) {
     const fetchLore = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`http://localhost:8000/api/lore/${civId}`);
+        const sessionId = getSessionId();
+        const res = await fetch(`${BACKEND_URL}/api/lore/${civId}?session_id=${sessionId}`);
         if (res.ok) {
           const data = await res.json();
           setLore(data.lore || []);

@@ -2,12 +2,15 @@ import "@/styles/globals.css";
 import type { AppProps } from "next/app";
 import { useEffect } from 'react';
 import { useTelemetry } from '../stores/useTelemetry';
+import { getSessionId } from '../utils/session';
+import { WS_URL } from '../utils/api';
 
 export default function App({ Component, pageProps }: AppProps) {
  const { setTelemetry, setConnected } = useTelemetry();
 
  useEffect(() => {
- const ws = new WebSocket('ws://localhost:8000/api/stream');
+ const sessionId = getSessionId();
+ const ws = new WebSocket(`${WS_URL}/api/stream/${sessionId}`);
  
  ws.onopen = () => {
  setConnected(true);

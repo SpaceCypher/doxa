@@ -8,7 +8,7 @@ from ..services import physics
 from ..services.dream_cycle import run_dream_cycle
 from pydantic import BaseModel
 from ..models.schemas import EventInjectPayload, BeliefInjectPayload, TelemetryPayload, AgentState, SimulationConfigPayload
-from ..models.db import engine, GlobalState, Agent, Cognition
+from ..models.db import current_session_id, engine, GlobalState, Agent, Cognition
 
 class ResourceSpawnPayload(BaseModel):
     x: int
@@ -19,40 +19,53 @@ router = APIRouter()
 
 class ConnectionManager:
     def __init__(self):
-        self.active_connections: List[WebSocket] = []
+        self.active_connections = {}
 
-    async def connect(self, websocket: WebSocket):
+    async def connect(self, websocket: WebSocket, session_id: str):
         await websocket.accept()
-        self.active_connections.append(websocket)
+        if session_id not in self.active_connections:
+            self.active_connections[session_id] = []
+        self.active_connections[session_id].append(websocket)
 
-    def disconnect(self, websocket: WebSocket):
-        # Bug F Fix: guard against ValueError if websocket already removed
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
+    def disconnect(self, websocket: WebSocket, session_id: str):
+        if session_id in self.active_connections and websocket in self.active_connections[session_id]:
+            self.active_connections[session_id].remove(websocket)
+            if not self.active_connections[session_id]:
+                del self.active_connections[session_id]
 
-    async def broadcast(self, message: dict):
-        for connection in self.active_connections:
-            try:
-                await connection.send_json(message)
-            except Exception:
-                pass
+    async def broadcast(self, message: dict, session_id: str):
+        if session_id in self.active_connections:
+            for connection in self.active_connections[session_id]:
+                try:
+                    await connection.send_json(message)
+                except Exception:
+                    pass
 
 manager = ConnectionManager()
 
-# Callback used by physics.py to broadcast to all clients
-async def broadcast_telemetry(payload: dict):
-    await manager.broadcast(payload)
+def get_broadcast_callback(session_id: str):
+    async def callback(payload: dict):
+        await manager.broadcast(payload, session_id)
+    return callback
 
-@router.websocket("/stream")
-async def websocket_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
+@router.websocket("/stream/{session_id}")
+async def websocket_endpoint(websocket: WebSocket, session_id: str):
+    from ..models.db import current_session_id
+    current_session_id.set(session_id)
+    await manager.connect(websocket, session_id)
     try:
         # Push current state on connection so frontend persists across reloads
         with Session(engine) as session:
-            state = session.exec(select(GlobalState).where(GlobalState.session_id == "default")).first()
+            state = session.exec(select(GlobalState).where(GlobalState.session_id == current_session_id.get())).first()
             if state:
-                agents = session.exec(select(Agent)).all()
-                agent_states = [AgentState(id=a.agent_id, loc=[a.coordinates.get("x",0), a.coordinates.get("y",0)], state=a.status, civ=a.civilization_id) for a in agents]
+                agents = session.exec(select(Agent).where(Agent.session_id == current_session_id.get())).all()
+                agent_states = [AgentState(
+                    id=a.agent_id, 
+                    loc=[a.coordinates.get("x",0), a.coordinates.get("y",0)], 
+                    state=a.status, 
+                    civ=a.civilization_id,
+                    inventory=dict(a.inventory) if a.inventory else {"food": 0, "wood": 0, "water": 0}
+                ) for a in agents]
                 asabiyyah_dict = state.asabiyyah_index if isinstance(state.asabiyyah_index, dict) else {}
                 cpr = state.common_pool_resources if isinstance(state.common_pool_resources, dict) else {}
                 payload = TelemetryPayload(
@@ -69,19 +82,22 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             data = await websocket.receive_text()
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
+        manager.disconnect(websocket, session_id)
 
 @router.get("/session/status")
-async def get_session_status():
-    return {"is_running": physics.is_running}
+async def get_session_status(session_id: str):
+    return {"is_running": session_id in physics.active_tasks}
 
 @router.post("/session/start")
-async def start_session(config: SimulationConfigPayload = None):
-    if not config:
-        config = SimulationConfigPayload()
+async def start_session(config: SimulationConfigPayload):
+    from ..models.db import current_session_id
+    from ..services.llm import set_api_key
+    current_session_id.set(config.session_id)
+    if config.api_key:
+        set_api_key(config.session_id, config.api_key)
     
     with Session(engine) as session:
-        if not session.exec(select(Agent)).first():
+        if not session.exec(select(Agent).where(Agent.session_id == current_session_id.get())).first():
             total_agents = config.num_agents_civ_a + config.num_agents_civ_b
             for i in range(1, total_agents + 1):
                 agent_id = f"A_{i:03d}"
@@ -94,6 +110,7 @@ async def start_session(config: SimulationConfigPayload = None):
                 
                 agent = Agent(
                     agent_id=agent_id,
+                    session_id=current_session_id.get(),
                     civilization_id=civ_id,
                     generation=1,
                     status="Operation",
@@ -109,12 +126,12 @@ async def start_session(config: SimulationConfigPayload = None):
                     prediction_error_history=[]
                 )
                 session.add(agent)
-                cognition = Cognition(agent_id=agent_id)
+                cognition = Cognition(agent_id=agent_id, session_id=current_session_id.get())
                 session.add(cognition)
             session.commit()
             
             # Seed the world environment with starting resources
-            state = session.exec(select(GlobalState).where(GlobalState.session_id == "default")).first()
+            state = session.exec(select(GlobalState).where(GlobalState.session_id == current_session_id.get()).where(GlobalState.session_id == current_session_id.get())).first()
             if state:
                 cpr = dict(state.common_pool_resources) if state.common_pool_resources else {}
                 cpr["wood"] = config.start_env_wood
@@ -140,20 +157,23 @@ async def start_session(config: SimulationConfigPayload = None):
                 session.add(state)
                 session.commit()
                 
-    physics.start()
-    return {"status": "started"}
+    physics.start(config.session_id, get_broadcast_callback(config.session_id))
+    return {"status": "started", "session_id": config.session_id}
 
 @router.post("/session/reset")
-async def reset_session():
-    physics.pause()
+async def reset_session(config: SimulationConfigPayload):
+    from ..models.db import current_session_id
+    current_session_id.set(config.session_id)
+    physics.pause(config.session_id)
+    
     with Session(engine) as session:
-        session.exec(delete(Agent))
-        session.exec(delete(Cognition))
-        session.exec(delete(GlobalState))
+        session.exec(delete(Agent).where(Agent.session_id == current_session_id.get()))
+        session.exec(delete(Cognition).where(Cognition.session_id == current_session_id.get()))
+        session.exec(delete(GlobalState).where(GlobalState.session_id == current_session_id.get()))
         
         # Recreate default global state
         new_state = GlobalState(
-            session_id="default",
+            session_id=current_session_id.get(),
             current_tick=0,
             asabiyyah_index={"civ_a": 1.0, "civ_b": 1.0},
             common_pool_resources={"wood": 0, "water": 0}
@@ -168,14 +188,15 @@ async def reset_session():
         cpr={"wood": 0, "water": 0},
         logs=[]
     )
-    await broadcast_telemetry(payload.model_dump())
+    # Broadcast to this specific session
+    await get_broadcast_callback(config.session_id)(payload.model_dump())
         
-    return {"status": "reset"}
+    return {"status": "reset", "session_id": config.session_id}
 
 @router.post("/session/pause")
-async def pause_session():
-    physics.pause()
-    return {"status": "paused"}
+async def pause_session(config: SimulationConfigPayload):
+    physics.pause(config.session_id)
+    return {"status": "paused", "session_id": config.session_id}
 
 
 @router.get("/lore/{civ_id}")
@@ -199,21 +220,29 @@ async def get_lore(civ_id: str, limit: int = 10):
 
 @router.post("/event/inject")
 async def inject_event(payload: EventInjectPayload):
+    from ..models.db import current_session_id
+    current_session_id.set(payload.session_id)
     print(f"Event Injected: {payload}")
+    session_id = payload.session_id
+    if session_id not in god_mode_queues:
+        god_mode_queues[session_id] = []
+    
     if payload.type == "famine":
-        god_mode_queue.append({"type": "famine"})
+        god_mode_queues[session_id].append({"type": "famine"})
     elif payload.type == "plague":
-        god_mode_queue.append({"type": "plague"})
+        god_mode_queues[session_id].append({"type": "plague"})
     elif payload.type == "miracle":
-        god_mode_queue.append({"type": "miracle", "location": payload.location})
+        god_mode_queues[session_id].append({"type": "miracle", "location": payload.location})
             
     return {"status": "event injected", "payload": payload.model_dump()}
 
 @router.post("/agent/{agent_id}/belief")
 async def inject_belief(agent_id: str, payload: BeliefInjectPayload):
     from sqlalchemy.orm.attributes import flag_modified
+    from ..models.db import current_session_id
+    current_session_id.set(payload.session_id)
     with Session(engine) as session:
-        cognition = session.exec(select(Cognition).where(Cognition.agent_id == agent_id)).first()
+        cognition = session.exec(select(Cognition).where(Cognition.session_id == current_session_id.get()).where(Cognition.agent_id == agent_id)).first()
         if not cognition:
             raise HTTPException(status_code=404, detail="Agent not found")
             
@@ -233,14 +262,16 @@ async def inject_belief(agent_id: str, payload: BeliefInjectPayload):
 @router.post("/civ/{civ_id}/belief")
 async def inject_civ_belief(civ_id: str, payload: BeliefInjectPayload):
     from sqlalchemy.orm.attributes import flag_modified
+    from ..models.db import current_session_id
+    current_session_id.set(payload.session_id)
     with Session(engine) as session:
         # Get all agents in the civilization
-        agents = session.exec(select(Agent).where(Agent.civilization_id == civ_id)).all()
+        agents = session.exec(select(Agent).where(Agent.session_id == current_session_id.get()).where(Agent.civilization_id == civ_id)).all()
         if not agents:
             raise HTTPException(status_code=404, detail="Civilization or agents not found")
         
         agent_ids = [a.agent_id for a in agents]
-        cognitions = session.exec(select(Cognition).where(Cognition.agent_id.in_(agent_ids))).all()
+        cognitions = session.exec(select(Cognition).where(Cognition.session_id == current_session_id.get()).where(Cognition.agent_id.in_(agent_ids))).all()
         
         for cognition in cognitions:
             graph = dict(cognition.belief_graph) if cognition.belief_graph else {"functional": [], "relational": [], "theological": []}
@@ -258,10 +289,12 @@ async def inject_civ_belief(civ_id: str, payload: BeliefInjectPayload):
     return {"status": "civilization belief injected", "civ_id": civ_id, "agents_affected": len(cognitions)}
 
 @router.get("/agent/{agent_id}")
-async def get_agent(agent_id: str):
+async def get_agent(agent_id: str, session_id: str):
+    from ..models.db import current_session_id
+    current_session_id.set(session_id)
     with Session(engine) as session:
-        agent = session.exec(select(Agent).where(Agent.agent_id == agent_id)).first()
-        cognition = session.exec(select(Cognition).where(Cognition.agent_id == agent_id)).first()
+        agent = session.exec(select(Agent).where(Agent.session_id == current_session_id.get()).where(Agent.agent_id == agent_id)).first()
+        cognition = session.exec(select(Cognition).where(Cognition.session_id == current_session_id.get()).where(Cognition.agent_id == agent_id)).first()
         
         if not agent:
             raise HTTPException(status_code=404, detail="Agent not found")
@@ -271,29 +304,44 @@ async def get_agent(agent_id: str):
             "cognition": cognition.model_dump() if cognition else None
         }
 
-from ..services.physics import god_mode_queue
+from ..services.physics import god_mode_queues
 
 @router.post("/cycle/dream")
-async def trigger_dream_cycle():
-    physics.pause()
+async def trigger_dream_cycle(session_id: str):
+    from ..models.db import current_session_id
+    current_session_id.set(session_id)
+    physics.pause(session_id)
     await run_dream_cycle()
-    physics.start()
+    physics.start(session_id, get_broadcast_callback(session_id))
     return {"status": "dream cycle completed", "message": "Episodic memory flushed, semantic beliefs updated"}
 
 @router.post("/agent/{agent_id}/smite")
-async def smite_agent(agent_id: str):
-    god_mode_queue.append({"type": "smite", "agent_id": agent_id})
+async def smite_agent(agent_id: str, session_id: str):
+    from ..models.db import current_session_id
+    current_session_id.set(session_id)
+    if session_id not in god_mode_queues:
+        god_mode_queues[session_id] = []
+    god_mode_queues[session_id].append({"type": "smite", "agent_id": agent_id})
     return {"status": "smited", "agent_id": agent_id}
 
 @router.post("/agent/{agent_id}/bless")
-async def bless_agent(agent_id: str):
-    god_mode_queue.append({"type": "bless", "agent_id": agent_id})
+async def bless_agent(agent_id: str, session_id: str):
+    from ..models.db import current_session_id
+    current_session_id.set(session_id)
+    if session_id not in god_mode_queues:
+        god_mode_queues[session_id] = []
+    god_mode_queues[session_id].append({"type": "bless", "agent_id": agent_id})
     return {"status": "blessed", "agent_id": agent_id}
 
 @router.post("/resource/spawn")
 async def spawn_resource(payload: ResourceSpawnPayload):
+    from ..models.db import current_session_id
+    session_id = payload.session_id if hasattr(payload, 'session_id') else current_session_id.get()
+    current_session_id.set(session_id)
     res_type = "Crop" if payload.type == "food" else payload.type.capitalize()
-    god_mode_queue.append({
+    if session_id not in god_mode_queues:
+        god_mode_queues[session_id] = []
+    god_mode_queues[session_id].append({
         "type": "spawn",
         "res_type": res_type,
         "x": payload.x,
@@ -305,7 +353,7 @@ async def spawn_resource(payload: ResourceSpawnPayload):
 # ── Akashic Records (Lore / RAG) ──────────────────────────────────────────────
 
 @router.get("/lore/{civ_id}")
-async def get_akashic_records(civ_id: str, limit: int = 20):
+async def get_akashic_records(civ_id: str, session_id: str, limit: int = 20):
     """
     Returns the most recent lore events for a civilization (for the Akashic Records UI panel).
     Includes GLOBAL events (miracles, famines, plagues).
@@ -321,14 +369,14 @@ async def get_akashic_records(civ_id: str, limit: int = 20):
 
 
 @router.get("/lore/{civ_id}/query")
-async def query_akashic_records(civ_id: str, q: str, n: int = 5):
+async def query_akashic_records(civ_id: str, session_id: str, q: str, n: int = 5):
     """
     Semantic search over the Akashic Records for a civilization.
     Returns the most semantically relevant historical events given a query string.
     """
     try:
         from ..services.lore import query_lore
-        results = query_lore(civ_id=civ_id, query_text=q, n_results=n)
+        results = query_lore(session_id=session_id, civ_id=civ_id, query_text=q, n_results=n)
         return {"civ_id": civ_id, "query": q, "results": results}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lore query failed: {str(e)}")

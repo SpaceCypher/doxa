@@ -1,7 +1,8 @@
+import { BACKEND_URL } from "../utils/api";
 import { useEffect, useState, useRef } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
-import { Users, Database, Globe, Play, Square, RefreshCcw, Activity, ChevronDown, Map as MapIcon, ShieldAlert, LineChart, Sparkles, X, Wifi, WifiOff, Swords, Pause, RotateCcw, Zap, MonitorPlay, Droplets, TreePine, Apple, Heart, Battery, List, ChevronUp, Terminal, Settings, HelpCircle, Filter } from 'lucide-react';
+import { Users, Database, Globe, Play, Square, RefreshCcw, Activity, ChevronDown, Map as MapIcon, ShieldAlert, LineChart, Sparkles, X, Wifi, WifiOff, Swords, Pause, RotateCcw, Zap, MonitorPlay, Droplets, TreePine, Apple, Heart, Battery, List, ChevronUp, Terminal, Settings, HelpCircle, Filter, BarChart3, Key } from 'lucide-react';
 import CanvasGrid from '../components/CanvasGrid';
 import { TelemetryChart } from '../components/TelemetryChart';
 import { TimelineSlider } from '../components/TimelineSlider';
@@ -10,9 +11,11 @@ import LorePanel from '../components/LorePanel';
 import { useTelemetry } from '../stores/useTelemetry';
 import { TooltipIcon } from '../components/TooltipIcon';
 import { HowToPlayModal } from '../components/HowToPlayModal';
+import { ApiKeyModal } from '../components/ApiKeyModal';
+import { getSessionId } from '../utils/session';
 
 export default function Home() {
-  const { tick, asabiyyah, agents, connected, cpr, centralLogs, setFocusedAgent, world_seed, clearLogs, trackedAgentId, setTrackedAgentId } = useTelemetry();
+  const { tick, asabiyyah, agents, connected, cpr, centralLogs, setFocusedAgent, world_seed, trackedAgentId, setTrackedAgentId } = useTelemetry();
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
@@ -25,13 +28,18 @@ export default function Home() {
   const [activityLogFilter, setActivityLogFilter] = useState<string[]>([]);
   const [showActivityFilter, setShowActivityFilter] = useState(false);
   const [showTrackAgentDropdown, setShowTrackAgentDropdown] = useState(false);
-  const [showTutorial, setShowTutorial] = useState(false);
+  const [showHowToPlay, setShowHowToPlay] = useState(false);
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
 
+  // Auto-show tutorial or API key modal on first visit
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const isHidden = localStorage.getItem('doxa_hide_tutorial') === 'true';
-      if (!isHidden) {
-        setShowTutorial(true);
+    const isHidden = localStorage.getItem('doxa_hide_tutorial') === 'true';
+    if (!isHidden) {
+      setShowHowToPlay(true);
+    } else {
+      const apiKey = localStorage.getItem('doxa_api_key');
+      if (!apiKey) {
+        setShowApiKeyModal(true);
       }
     }
   }, []);
@@ -50,7 +58,8 @@ export default function Home() {
   useEffect(() => {
     const fetchStatus = async () => {
       try {
-        const res = await fetch('http://localhost:8000/api/session/status');
+        const sessionId = getSessionId();
+        const res = await fetch(`${BACKEND_URL}/api/session/status?session_id=${sessionId}`);
         if (res.ok) {
           const data = await res.json();
           setIsRunning(data.is_running);
@@ -68,7 +77,16 @@ export default function Home() {
     if (isProcessing) return;
     setIsProcessing(true);
     try {
-      await fetch('http://localhost:8000/api/session/start', { method: 'POST' });
+      const sessionId = getSessionId();
+      const apiKey = localStorage.getItem('doxa_api_key');
+      await fetch(`${BACKEND_URL}/api/session/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          session_id: sessionId,
+          api_key: apiKey || undefined
+        })
+      });
       setIsRunning(true);
     } catch (e) {} finally {
       setIsProcessing(false);
@@ -79,7 +97,12 @@ export default function Home() {
     if (isProcessing) return;
     setIsProcessing(true);
     try {
-      await fetch('http://localhost:8000/api/session/pause', { method: 'POST' });
+      const sessionId = getSessionId();
+      await fetch(`${BACKEND_URL}/api/session/pause`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId })
+      });
       setIsRunning(false);
     } catch (e) {} finally {
       setIsProcessing(false);
@@ -89,9 +112,14 @@ export default function Home() {
   const resetSimulation = async () => {
     if (isProcessing) return;
     setIsProcessing(true);
-    clearLogs();
+    useTelemetry.setState({ centralLogs: [] });
     try {
-      await fetch('http://localhost:8000/api/session/reset', { method: 'POST' });
+      const sessionId = getSessionId();
+      await fetch(`${BACKEND_URL}/api/session/reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId })
+      });
       setIsRunning(false);
     } catch (e) {} finally {
       setIsProcessing(false);
@@ -207,7 +235,7 @@ export default function Home() {
             <MapIcon className="w-4 h-4" /> Legend
           </button>
           <button 
-            onClick={() => setShowTutorial(true)}
+            onClick={() => setShowHowToPlay(true)}
             className="px-4 font-bold uppercase tracking-widest text-xs flex items-center gap-2 transition-all text-[#C49A53] hover:bg-[#1A1A18] hover:text-[#c28e4e]"
           >
             <HelpCircle className="w-4 h-4" /> Guide
@@ -363,6 +391,18 @@ export default function Home() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* API KEY CONFIG BOX */}
+        <div className="flex items-center gap-2 mt-2 animate-in fade-in slide-in-from-top-2">
+          <button
+            onClick={() => setShowApiKeyModal(true)}
+            className="h-10 px-4 font-bold uppercase tracking-widest text-xs flex items-center gap-2 transition-all bg-[#111110]/95 backdrop-blur border border-[#3B3A35] rounded shadow-2xl flex-1 text-[#A8A08F] hover:bg-[#1A1A18] hover:text-white"
+            title="Configure API Key"
+          >
+            <Key className="w-4 h-4 text-[#C49A53]" />
+            <span>API Key Config</span>
+          </button>
         </div>
       </div>
 
@@ -592,7 +632,7 @@ export default function Home() {
             >
               <X className="w-4 h-4" />
             </button>
-            <DemiurgicLayer onClose={() => setIsGenesisOpen(false)} />
+            <DemiurgicLayer onClose={() => setIsGenesisOpen(false)} isRunning={isRunning} />
           </div>
         </div>
       )}
@@ -608,7 +648,19 @@ export default function Home() {
       </div>
 
       {/* Guide / How to Play Modal */}
-      {showTutorial && <HowToPlayModal onClose={() => setShowTutorial(false)} />}
+      {showHowToPlay && (
+        <HowToPlayModal onClose={() => {
+          setShowHowToPlay(false);
+          if (!localStorage.getItem('doxa_api_key')) {
+            setShowApiKeyModal(true);
+          }
+        }} />
+      )}
+
+      <ApiKeyModal 
+        isOpen={showApiKeyModal} 
+        onClose={() => setShowApiKeyModal(false)} 
+      />
     </div>
   );
 }

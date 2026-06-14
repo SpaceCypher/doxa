@@ -5,6 +5,8 @@ import { AgentPanel } from '../../components/AgentPanel';
 import { MemoryExplorer } from '../../components/MemoryExplorer';
 import { ArrowLeft, BrainCircuit } from 'lucide-react';
 import Link from 'next/link';
+import { BACKEND_URL } from '../../utils/api';
+import { getSessionId } from '../../utils/session';
 
 export default function AgentInspector() {
   const router = useRouter();
@@ -21,7 +23,8 @@ export default function AgentInspector() {
     
     const fetchAgent = async () => {
       try {
-        const res = await fetch(`http://localhost:8000/api/agent/${id}`);
+        const sessionId = getSessionId();
+        const res = await fetch(`${BACKEND_URL}/api/agent/${id}?session_id=${sessionId}`);
         if (res.ok) {
           const json = await res.json();
           setData(json);

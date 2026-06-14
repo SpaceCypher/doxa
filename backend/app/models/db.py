@@ -1,6 +1,9 @@
 import os
 from typing import Any, Optional
+from contextvars import ContextVar
 from sqlmodel import Field, SQLModel, JSON, Column, create_engine
+
+current_session_id: ContextVar[str] = ContextVar("current_session_id", default="default")
 
 sqlite_file_name = "data/doxa_world.db"
 # Ensure the data directory exists
@@ -39,6 +42,7 @@ class GlobalState(SQLModel, table=True):
 
 class Agent(SQLModel, table=True):
     __tablename__ = "agents"
+    session_id: str = Field(primary_key=True, max_length=50)
     agent_id: str = Field(primary_key=True, max_length=10)
     civilization_id: str = Field(default="civ_a", max_length=20)
     generation: int = Field(default=1)
@@ -54,7 +58,8 @@ class Agent(SQLModel, table=True):
 
 class Cognition(SQLModel, table=True):
     __tablename__ = "cognition"
-    agent_id: str = Field(primary_key=True, max_length=10, foreign_key="agents.agent_id")
+    session_id: str = Field(primary_key=True, max_length=50)
+    agent_id: str = Field(primary_key=True, max_length=10)
     lexicon_hash: Any = Field(default={}, sa_column=Column(JSON))
     working_memory: Any = Field(default=[], sa_column=Column(JSON))
     episodic_memory: Any = Field(default=[], sa_column=Column(JSON))
